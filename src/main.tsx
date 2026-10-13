@@ -6,6 +6,7 @@ import { startMcpBridge } from './mcp/server';
 import './core/adjust';
 import * as store from './core/store';
 import { registerTools } from './tools';
+import { restoreLibrary } from './core/library';
 import { SELECT_TOOLS } from './tools/select2';
 import { RETOUCH_TOOLS } from './tools/retouch';
 import { WARP_TOOLS, WARP_COMMANDS } from './tools/warp';
@@ -26,4 +27,6 @@ installRecorder(COMMANDS);
 
 render(<App />, document.getElementById('app')!);
 startMcpBridge().catch((e) => console.error('MCP bridge failed to start', e));
+// Reopen the Assets folder chosen last time (desktop).
+restoreLibrary().catch(() => {});
 if (import.meta.env.DEV) (window as any).__lucentedit = { store };

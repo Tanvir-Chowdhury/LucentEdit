@@ -8,6 +8,7 @@ import { ui } from './psCommands';
 import { NavigatorPanel, InfoPanel, HistogramPanel, SwatchesPanel } from './infoPanels';
 import { historySource } from '../tools/retouch';
 import { ActionsPanel } from './ActionsPanel';
+import { AssetsPanel } from './AssetsPanel';
 import { BLEND_MODES } from '../core/types';
 import { tick, cur, commit, touch, select, selectedLayers, jumpTo, maskTarget } from '../core/store';
 import { useTick, usePaint } from '../core/store';
@@ -22,7 +23,7 @@ import { run } from './commands';
 const BLEND_LABEL = (b: string) => b.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
 const TOP_TABS: [string, string][] = [['properties', 'Properties'], ['navigator', 'Navigator'], ['info', 'Info'], ['histogram', 'Histogram']];
-const BOTTOM_TABS: [string, string][] = [['layers', 'Layers'], ['history', 'History'], ['actions', 'Actions'], ['swatches', 'Swatches']];
+const BOTTOM_TABS: [string, string][] = [['layers', 'Layers'], ['assets', 'Assets'], ['history', 'History'], ['actions', 'Actions'], ['swatches', 'Swatches']];
 
 export function Panels() {
   useTick();
@@ -42,7 +43,7 @@ export function Panels() {
       </div>
       <div class="panel grow" style={{ flex: '1 1 54%', minHeight: 220 }}>
         <div class="panel-head">{tabs(BOTTOM_TABS, 'bottomTab')}</div>
-        {u.bottomTab === 'history' ? <HistoryPanel /> : u.bottomTab === 'swatches' ? <SwatchesPanel /> : u.bottomTab === 'actions' ? <ActionsPanel /> : <LayersPanel />}
+        {u.bottomTab === 'history' ? <HistoryPanel /> : u.bottomTab === 'swatches' ? <SwatchesPanel /> : u.bottomTab === 'actions' ? <ActionsPanel /> : u.bottomTab === 'assets' ? <div class="layers"><AssetsPanel /></div> : <LayersPanel />}
       </div>
     </div>
   );
@@ -167,7 +168,7 @@ function DocProps({ ds }: { ds: DocState }) {
           <button class="btn grow" onClick={() => run('canvasSize')}>Canvas Size…</button>
         </div>
       </Section>
-      <div class="empty">Select a layer to edit its properties.<br />Tip: press <kbd>Ctrl</kbd>+<kbd>K</kbd> to search every command.</div>
+      <div class="empty">Select a layer to edit its properties.<br />Tip: press <kbd>Ctrl</kbd>+<kbd>F</kbd> to search every command.</div>
     </>
   );
 }

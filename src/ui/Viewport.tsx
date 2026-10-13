@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
-import { cur, paint, tick, tool, viewOpts, cursorPos, needsFit, commit, touch, interaction, activeIndex } from '../core/store';
+import { cur, paint, tick, tool, viewOpts, cursorPos, needsFit, commit, touch, interaction, activeIndex, toast } from '../core/store';
 import { useTick, usePaint } from '../core/store';
 import { renderDoc, fontString, fitText, renderHooks } from '../core/render';
 import { maskMeta, maskEdges, drawQuickMaskOverlay } from '../core/selection';
@@ -300,6 +300,17 @@ export function Viewport() {
   const onDrop = async (e: DragEvent) => {
     e.preventDefault();
     setDropping(false);
+    // An asset dragged from the Assets panel is placed centered on the drop point.
+    const assetId = e.dataTransfer?.getData('application/x-lucentedit-asset');
+    if (assetId) {
+      const { findAsset, placeAsset } = await import('../core/library');
+      const a = findAsset(assetId);
+      if (!a) return;
+      const r = host.current!.getBoundingClientRect();
+      const p = view.toDoc(e.clientX - r.left, e.clientY - r.top);
+      try { await placeAsset(a, { centerX: p.x, centerY: p.y }); } catch (err: any) { toast(String(err?.message ?? err), 'error'); }
+      return;
+    }
     const files = [...(e.dataTransfer?.files ?? [])];
     if (!files.length) return;
     const opened = await Promise.all(files.map(fileToOpened));

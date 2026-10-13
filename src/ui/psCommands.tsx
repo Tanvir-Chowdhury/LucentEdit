@@ -321,6 +321,7 @@ export const PS_COMMANDS: Command[] = [
   { id: 'prevDoc', label: 'Previous Document', keys: 'Mod+Shift+Tab', run: () => { if (docs.value.length) { activeIndex.value = (activeIndex.value - 1 + docs.value.length) % docs.value.length; touch(); } } },
   // Window
   { id: 'winLayers', label: 'Layers', keys: 'F7', run: showPanel('bottom', 'layers') },
+  { id: 'winAssets', label: 'Assets', run: showPanel('bottom', 'assets') },
   { id: 'winHistory', label: 'History', run: showPanel('bottom', 'history') },
   { id: 'winSwatches', label: 'Swatches', run: showPanel('bottom', 'swatches') },
   { id: 'winProperties', label: 'Properties', run: showPanel('top', 'properties') },

@@ -1,0 +1,385 @@
+import { signal } from '@preact/signals';
+import type { Layer } from './types';
+import { isTauri, tauriInvoke, readPath, writePath, layersFromFile, exportBytes } from './io';
+import { cur, commit, toast, createDoc, touch } from './store';
+import { addLayer, moveLayer, topLevel } from './ops';
+import { bounds, unionRects, cloneLayers, bytesToDataURL, makeCanvas, ctx2d } from './util';
+import { flatten } from './render';
+
+// Assets library: a folder chosen by the user. Each subfolder is a category, each file inside
+// is an asset. library.json in the root keeps tags, descriptions and brand color palettes, so the
+// folder stays plain and usable outside the app (and syncable with Dropbox/Drive/git).
+
+export interface Asset {
+  id: string; // "<category>/<file>"
+  name: string; // file name without extension
+  file: string;
+  category: string;
+  ext: string;
+  kind: 'image' | 'vector' | 'document' | 'font' | 'other';
+  size: number;
+  modified: number;
+  tags: string[];
+  description?: string;
+}
+export interface Palette { name: string; colors: string[] }
+interface Meta { version: 1; assets: Record<string, { tags?: string[]; description?: string }>; palettes: Palette[] }
+
+export const DEFAULT_CATEGORIES = ['Logos', 'Icons', 'Photos', 'Backgrounds', 'Textures', 'Illustrations', 'Templates', 'Fonts'];
+const META_FILE = 'library.json';
+const KINDS: Record<string, Asset['kind']> = {
+  png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', gif: 'image', bmp: 'image', avif: 'image',
+  svg: 'vector', psd: 'document', lucentedit: 'document', lucent: 'document', ttf: 'font', otf: 'font', woff: 'font', woff2: 'font',
+};
+
+export const library = signal<{ root: string | null; categories: string[]; assets: Asset[]; palettes: Palette[]; loading: boolean; error?: string }>({
+  root: null, categories: [], assets: [], palettes: [], loading: false,
+});
+
+// File system: Tauri commands on desktop, File System Access API in Chromium browsers.
+
+interface Entry { name: string; isDir: boolean; size: number; modified: number }
+interface LibFS {
+  list(rel: string): Promise<Entry[]>;
+  read(rel: string): Promise<Uint8Array>;
+  write(rel: string, bytes: Uint8Array): Promise<void>;
+  mkdir(rel: string): Promise<void>;
+  remove(rel: string): Promise<void>;
+  rename(from: string, to: string): Promise<void>;
+  /** Absolute path for MCP clients (desktop only). */
+  abs(rel: string): string;
+}
+
+const join = (...p: string[]) => p.filter(Boolean).join('/').replace(/\/+/g, '/');
+
+function tauriFS(root: string): LibFS {
+  const a = (rel: string) => join(root, rel);
+  return {
+    list: async (rel) => (await tauriInvoke<any[]>('list_dir', { path: a(rel) })).map((e) => ({ name: e.name, isDir: e.is_dir, size: e.size, modified: e.modified_ms })),
+    read: (rel) => readPath(a(rel)),
+    write: (rel, b) => writePath(a(rel), b),
+    mkdir: (rel) => tauriInvoke('make_dir', { path: a(rel) }),
+    remove: (rel) => tauriInvoke('remove_path', { path: a(rel) }),
+    rename: (from, to) => tauriInvoke('rename_path', { from: a(from), to: a(to) }),
+    abs: a,
+  };
+}
+
+function browserFS(rootHandle: any): LibFS {
+  const dirOf = async (rel: string, create = false): Promise<any> => {
+    let d = rootHandle;
+    for (const part of rel.split('/').filter(Boolean)) d = await d.getDirectoryHandle(part, { create });
+    return d;
+  };
+  const split = (rel: string) => { const i = rel.lastIndexOf('/'); return [rel.slice(0, Math.max(0, i)), rel.slice(i + 1)]; };
+  const fs: LibFS = {
+    async list(rel) {
+      const out: Entry[] = [];
+      for await (const [name, h] of (await dirOf(rel)).entries()) {
+        if (h.kind === 'directory') out.push({ name, isDir: true, size: 0, modified: 0 });
+        else { const f = await h.getFile(); out.push({ name, isDir: false, size: f.size, modified: f.lastModified }); }
+      }
+      return out;
+    },
+    async read(rel) {
+      const [dir, name] = split(rel);
+      const f = await (await (await dirOf(dir)).getFileHandle(name)).getFile();
+      return new Uint8Array(await f.arrayBuffer());
+    },
+    async write(rel, bytes) {
+      const [dir, name] = split(rel);
+      const w = await (await (await dirOf(dir, true)).getFileHandle(name, { create: true })).createWritable();
+      await w.write(bytes);
+      await w.close();
+    },
+    async mkdir(rel) { await dirOf(rel, true); },
+    async remove(rel) { const [dir, name] = split(rel); await (await dirOf(dir)).removeEntry(name, { recursive: true }); },
+    async rename(from, to) {
+      // FSA has no portable move: copy then delete (files only; categories are renamed file by file).
+      const entries = await fs.list(from).catch(() => null);
+      if (entries) {
+        await fs.mkdir(to);
+        for (const e of entries) await fs.rename(join(from, e.name), join(to, e.name));
+        await fs.remove(from);
+        return;
+      }
+      await fs.write(to, await fs.read(from));
+      await fs.remove(from);
+    },
+    abs: (rel) => rel,
+  };
+  return fs;
+}
+
+let fs: LibFS | null = null;
+const STORE_KEY = 'lucentedit.library';
+
+/** True when the library can be used here (desktop app, or a browser with folder access). */
+export const librarySupported = () => isTauri || 'showDirectoryPicker' in window;
+
+export async function chooseLibraryFolder() {
+  if (isTauri) {
+    const { open } = await import('@tauri-apps/plugin-dialog');
+    const dir = await open({ directory: true, multiple: false, title: 'Choose a folder for your Assets library' });
+    if (!dir || Array.isArray(dir)) return;
+    await connect(String(dir), tauriFS(String(dir)));
+    try { localStorage.setItem(STORE_KEY, String(dir)); } catch { /* storage unavailable */ }
+  } else if ('showDirectoryPicker' in window) {
+    const h = await (window as any).showDirectoryPicker({ mode: 'readwrite', id: 'lucentedit-assets' });
+    await connect(h.name, browserFS(h));
+  } else toast('Choosing a folder needs the desktop app (or a Chromium browser)', 'error');
+}
+
+/** Use a folder by path (desktop). Same as choosing it in the dialog. */
+export async function useLibraryFolder(path: string) {
+  if (!isTauri) throw new Error('Setting the folder by path needs the desktop app');
+  await connect(path, tauriFS(path));
+  try { localStorage.setItem(STORE_KEY, path); } catch { /* storage unavailable */ }
+}
+
+/** Reconnect to the folder used last time (desktop only; browsers must ask again). */
+export async function restoreLibrary() {
+  if (!isTauri) return;
+  let root: string | null = null;
+  try { root = localStorage.getItem(STORE_KEY); } catch { /* storage unavailable */ }
+  if (root) await connect(root, tauriFS(root)).catch(() => { library.value = { ...library.value, root: null, error: `Couldn't open ${root}` }; });
+}
+
+export function disconnectLibrary() {
+  fs = null;
+  try { localStorage.removeItem(STORE_KEY); } catch { /* storage unavailable */ }
+  library.value = { root: null, categories: [], assets: [], palettes: [], loading: false };
+}
+
+async function connect(root: string, f: LibFS) {
+  await f.mkdir(''); // creates the folder if it doesn't exist yet
+  const top = await f.list('');
+  fs = f;
+  library.value = { ...library.value, root, loading: true, error: undefined };
+  // A brand-new folder gets the default categories so it's ready to use.
+  if (!top.some((e) => e.isDir)) for (const c of DEFAULT_CATEGORIES) await f.mkdir(c);
+  await refreshLibrary();
+}
+
+async function readMeta(): Promise<Meta> {
+  try {
+    const m = JSON.parse(new TextDecoder().decode(await fs!.read(META_FILE)));
+    return { version: 1, assets: m.assets ?? {}, palettes: Array.isArray(m.palettes) ? m.palettes : [] };
+  } catch { return { version: 1, assets: {}, palettes: [] }; }
+}
+
+async function writeMeta(m: Meta) {
+  await fs!.write(META_FILE, new TextEncoder().encode(JSON.stringify(m, null, 2)));
+}
+
+export async function refreshLibrary() {
+  if (!fs) return;
+  library.value = { ...library.value, loading: true };
+  try {
+    const meta = await readMeta();
+    const cats = (await fs.list('')).filter((e) => e.isDir && !e.name.startsWith('.')).map((e) => e.name).sort((a, b) => a.localeCompare(b));
+    const assets: Asset[] = [];
+    for (const c of cats) {
+      for (const e of await fs.list(c)) {
+        if (e.isDir || e.name.startsWith('.')) continue;
+        const ext = e.name.split('.').pop()!.toLowerCase();
+        const id = `${c}/${e.name}`;
+        assets.push({
+          id, name: e.name.replace(/\.[^.]+$/, ''), file: e.name, category: c, ext, kind: KINDS[ext] ?? 'other',
+          size: e.size, modified: e.modified, tags: meta.assets[id]?.tags ?? [], description: meta.assets[id]?.description,
+        });
+      }
+    }
+    library.value = { ...library.value, categories: cats, assets, palettes: meta.palettes, loading: false, error: undefined };
+    registerFonts(assets.filter((a) => a.kind === 'font'));
+  } catch (e: any) {
+    library.value = { ...library.value, loading: false, error: String(e?.message ?? e) };
+  }
+}
+
+const need = () => { if (!fs) throw new Error('No Assets folder is set. Choose one in the Assets panel (Window > Assets).'); return fs; };
+const safeName = (s: string) => s.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/^\.+/, '').slice(0, 120) || 'Untitled';
+export const findAsset = (idOrName: string) => {
+  const q = idOrName.toLowerCase();
+  return library.value.assets.find((a) => a.id.toLowerCase() === q) ?? library.value.assets.find((a) => a.name.toLowerCase() === q || a.file.toLowerCase() === q);
+};
+
+export async function createCategory(name: string) {
+  await need().mkdir(safeName(name));
+  await refreshLibrary();
+}
+
+export async function renameCategory(from: string, to: string) {
+  const f = need(), t = safeName(to);
+  await f.rename(from, t);
+  const meta = await readMeta();
+  for (const k of Object.keys(meta.assets)) if (k.startsWith(from + '/')) { meta.assets[t + k.slice(from.length)] = meta.assets[k]; delete meta.assets[k]; }
+  await writeMeta(meta);
+  await refreshLibrary();
+}
+
+export async function deleteCategory(name: string) {
+  await need().remove(name);
+  await refreshLibrary();
+}
+
+/** Copy files into a category (keeps the original name; adds " 2", " 3"... on clashes). */
+export async function importIntoCategory(category: string, files: { name: string; bytes: Uint8Array }[]) {
+  const f = need();
+  for (const file of files) await f.write(join(category, uniqueName(category, safeName(file.name))), file.bytes);
+  await refreshLibrary();
+}
+
+function uniqueName(category: string, file: string) {
+  const taken = new Set(library.value.assets.filter((a) => a.category === category).map((a) => a.file.toLowerCase()));
+  if (!taken.has(file.toLowerCase())) return file;
+  const dot = file.lastIndexOf('.'), base = dot > 0 ? file.slice(0, dot) : file, ext = dot > 0 ? file.slice(dot) : '';
+  for (let i = 2; ; i++) if (!taken.has(`${base} ${i}${ext}`.toLowerCase())) return `${base} ${i}${ext}`;
+}
+
+export async function deleteAsset(a: Asset) {
+  await need().remove(a.id);
+  const meta = await readMeta();
+  delete meta.assets[a.id];
+  await writeMeta(meta);
+  await refreshLibrary();
+}
+
+export async function renameAsset(a: Asset, name: string) {
+  const file = `${safeName(name)}.${a.ext}`;
+  await need().rename(a.id, join(a.category, file));
+  const meta = await readMeta();
+  if (meta.assets[a.id]) { meta.assets[`${a.category}/${file}`] = meta.assets[a.id]; delete meta.assets[a.id]; }
+  await writeMeta(meta);
+  await refreshLibrary();
+}
+
+export async function setAssetInfo(a: Asset, info: { tags?: string[]; description?: string }) {
+  const meta = await readMeta();
+  meta.assets[a.id] = { ...meta.assets[a.id], ...info };
+  await writeMeta(meta);
+  await refreshLibrary();
+}
+
+export async function savePalette(p: Palette) {
+  const meta = await readMeta();
+  meta.palettes = [...meta.palettes.filter((x) => x.name !== p.name), p];
+  await writeMeta(meta);
+  await refreshLibrary();
+}
+
+export async function deletePalette(name: string) {
+  const meta = await readMeta();
+  meta.palettes = meta.palettes.filter((x) => x.name !== name);
+  await writeMeta(meta);
+  await refreshLibrary();
+}
+
+export const readAsset = (a: Asset) => need().read(a.id);
+export const assetPath = (a: Asset) => need().abs(a.id);
+
+/** Place an asset in the active document; optional box in document px (aspect kept if only one side). */
+export async function placeAsset(a: Asset, box: { x?: number; y?: number; width?: number; height?: number; centerX?: number; centerY?: number } = {}): Promise<Layer[]> {
+  const ds = cur();
+  if (!ds) throw new Error('Open or create a document first');
+  if (a.kind === 'font' || a.kind === 'other') throw new Error(`${a.file} can't be placed on the canvas`);
+  const layers = await layersFromFile({ name: a.file, bytes: await readAsset(a) }, ds.doc);
+  const { scaleLayer } = await import('./ops');
+  for (const l of layers) {
+    l.name = a.name;
+    if (box.width || box.height) {
+      const ratio = l.w / l.h;
+      const w = box.width ?? (box.height! * ratio), h = box.height ?? (box.width! / ratio);
+      scaleLayer(l, w / l.w, h / l.h, l.x, l.y);
+    }
+    if (box.x != null || box.y != null) moveLayer(l, (box.x ?? l.x) - l.x, (box.y ?? l.y) - l.y);
+    if (box.centerX != null && box.centerY != null) moveLayer(l, box.centerX - (l.x + l.w / 2), box.centerY - (l.y + l.h / 2));
+    addLayer(l, ds);
+  }
+  commit(`Place ${a.name}`, ds);
+  return layers;
+}
+
+/**
+ * Save layers of the active document (default: the selected ones) as a new asset.
+ * PNG keeps pixels and effects, SVG keeps vectors editable, .lucentedit keeps every layer.
+ */
+export async function saveLayersAsAsset(category: string, name: string, format: 'png' | 'svg' | 'lucentedit' = 'png', layerIds?: string[]) {
+  const ds = cur();
+  if (!ds) throw new Error('Open a document first');
+  const pick = layerIds?.length ? ds.doc.layers.flatMap(function find(l): Layer[] { return layerIds.includes(l.id) ? [l] : l.type === 'group' ? l.children.flatMap(find) : []; })
+    : topLevel(ds.selected.map((id) => ds.doc.layers.flatMap(function find(l): Layer[] { return l.id === id ? [l] : l.type === 'group' ? l.children.flatMap(find) : []; })).flat(), ds);
+  const src = pick.length ? pick : ds.doc.layers;
+  const b = unionRects(src.filter((l) => l.type !== 'adjust').map(bounds));
+  if (!b) throw new Error('Nothing to save');
+  const pad = 2, x = Math.floor(b.x) - pad, y = Math.floor(b.y) - pad;
+  const doc = createDoc({ name, width: Math.ceil(b.w) + pad * 2, height: Math.ceil(b.h) + pad * 2, background: null });
+  doc.layers = cloneLayers(src);
+  doc.layers.forEach((l) => moveLayer(l, -x, -y));
+  const bytes = await exportBytes(doc, format);
+  const file = uniqueName(category, `${safeName(name)}.${format}`);
+  if (!library.value.categories.includes(category)) await need().mkdir(safeName(category));
+  await need().write(join(category, file), bytes);
+  await refreshLibrary();
+  touch();
+  return library.value.assets.find((a) => a.id === `${category}/${file}`)!;
+}
+
+// Thumbnails (memory cache; rebuilt when the file changes).
+
+const thumbs = new Map<string, Promise<string | null>>();
+const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif', bmp: 'image/bmp', svg: 'image/svg+xml', avif: 'image/avif' };
+
+export function assetThumb(a: Asset, size = 160): Promise<string | null> {
+  const key = `${a.id}:${a.modified}:${a.size}:${size}`;
+  let p = thumbs.get(key);
+  if (!p) {
+    p = (async () => {
+      try {
+        const bytes = await readAsset(a);
+        if (MIME[a.ext]) return bytesToDataURL(bytes, MIME[a.ext]);
+        if (a.kind === 'document') {
+          const { docFromFile } = await import('./io');
+          const d = await docFromFile({ name: a.file, bytes });
+          return flatten(d, Math.min(1, size / Math.max(d.width, d.height))).toDataURL('image/png');
+        }
+        return null;
+      } catch { return null; }
+    })();
+    thumbs.set(key, p);
+  }
+  return p;
+}
+
+/** Small PNG preview for MCP clients (base64, no data: prefix). */
+export async function assetPreviewPNG(a: Asset, max = 512): Promise<string> {
+  const url = await assetThumb(a, max);
+  if (!url) throw new Error(`No preview for ${a.file}`);
+  const img = new Image();
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+  const s = Math.min(1, max / Math.max(img.naturalWidth || max, img.naturalHeight || max));
+  const c = makeCanvas((img.naturalWidth || max) * s, (img.naturalHeight || max) * s);
+  ctx2d(c).drawImage(img, 0, 0, c.width, c.height);
+  return c.toDataURL('image/png').split(',')[1];
+}
+
+// Fonts in the library become usable in the Type tool.
+
+export const libraryFonts = signal<string[]>([]);
+const loadedFonts = new Set<string>();
+
+async function registerFonts(fonts: Asset[]) {
+  const names: string[] = [];
+  for (const f of fonts) {
+    names.push(f.name);
+    if (loadedFonts.has(f.id + f.modified)) continue;
+    try {
+      const face = new FontFace(f.name, (await readAsset(f)).buffer as ArrayBuffer);
+      await face.load();
+      document.fonts.add(face);
+      loadedFonts.add(f.id + f.modified);
+    } catch { /* not a valid font file */ }
+  }
+  libraryFonts.value = names;
+}
+

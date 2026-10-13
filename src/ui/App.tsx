@@ -117,7 +117,7 @@ function Welcome() {
           {PRESETS.slice(0, 10).map((p) => <PresetCard p={p} onClick={() => newDocument(p.w, p.h, p.name)} />)}
         </div>
         <div class="tips">
-          <div class="tip-card"><b><Icon name="keyboard" size={15} /> Photoshop shortcuts</b>V, M, L, B, T, P, U, Ctrl+T, Ctrl+J and the rest work the way you expect. Press <kbd>Ctrl</kbd>+<kbd>/</kbd> for the full list.</div>
+          <div class="tip-card"><b><Icon name="keyboard" size={15} /> Photoshop shortcuts</b>V, M, L, B, T, P, U, Ctrl+T, Ctrl+J and the rest work the way you expect. Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> for the full list.</div>
           <div class="tip-card"><b><Icon name="file" size={15} /> Opens PSD & SVG</b>Bring your Photoshop layers and Illustrator SVGs. Export back to PSD, SVG, PNG, JPG and WebP.</div>
           <div class="tip-card"><b><Icon name="sparkles" size={15} /> Design with AI</b>Claude Code, Cursor, Codex and other agents can build and edit designs here through MCP.</div>
         </div>

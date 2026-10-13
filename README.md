@@ -71,6 +71,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 | **Effects** | Drop shadow, outer glow |
 | **Transform & distort** | Free Transform plus Edit > Transform > Skew, Distort, Perspective (straight lines stay straight) and Warp (Bezier mesh with Arc, Bulge, Flag, Wave, Fish, Rise, Inflate, Twist presets), and Filter > Liquify (Forward Warp, Reconstruct, Pucker, Bloat, Twirl) |
 | **Content-aware** | Edit > Content-Aware Fill (PatchMatch inpainting in a background worker), Select > Subject and Select > Sky. All run on your machine with no AI model downloads, so they are estimates rather than Photoshop's cloud ML |
+| **Assets library** | Pick any folder on your computer: each subfolder is a category (Logos, Icons, Photos, Backgrounds, Textures, Illustrations, Templates, Fonts by default). Browse, search by name or tag, click or drag to place, save layers as PNG/SVG/layered assets, keep brand color palettes. Fonts in the folder show up in the Type tool. Everything is plain files plus a `library.json`, so it syncs with Dropbox/Drive/git |
 | **Automation** | Actions panel: record, play, edit steps, assign F-keys, play on all open documents, saved between sessions |
 | **Masks** | Non-destructive layer masks (reveal/hide all, from selection; paint black to hide, white to reveal; enable, apply, delete) and clipping masks (Ctrl+Alt+G) |
 | **Adjustments** | Brightness/Contrast, Levels, Curves, Exposure, Vibrance, Hue/Saturation, Color Balance, Black & White, Photo Filter, Channel Mixer, Gradient Map, Selective Color, Shadows/Highlights, Invert, Posterize, Threshold, Desaturate, Equalize, Replace Color, Sepia, Auto Tone/Contrast/Color. 19 of them also work as non-destructive **adjustment layers** |
@@ -337,12 +338,15 @@ Use the HTTP URL `http://127.0.0.1:47800/mcp` if the client supports Streamable 
 | **Filters & adjustments** | `apply_filter` (72 filters), `add_adjustment_layer` (non-destructive) |
 | **Layers & guides** | `merge_layers` (down, visible, flatten), `set_guides`, `convert_to_smart_object`, `transform_layer` (distort / perspective by corners) |
 | **Content-aware** | `select_subject` (subject or sky), `content_aware_fill` |
+| **Assets library** | `list_assets` (categories, tags, brand palettes, fonts), `get_asset_preview`, `place_asset`, `save_asset`, `manage_assets` (categories, tags, palettes), `set_assets_folder` |
 | **See the result** | `render_preview` (returns a PNG so the agent can look at its own work) |
 | **Files** | `export_document` (png, jpg, webp, svg, psd, lucentedit), `open_file`, `save_document` |
 | **History** | `undo`, `redo` |
 | **Misc** | `list_fonts`, `batch` (run many operations in one call) |
 
 ### Example prompts
+
+- *"Use my Assets library: put my logo from Logos in the top-left corner, use the colors from my brand palette, and save the finished banner to the Templates category."*
 
 - *"Create a 1080x1080 Instagram post for a coffee shop launch: warm gradient background, a bold headline, a minimal cup icon drawn with paths. Render a preview and refine it until it looks polished, then export PNG to ~/Desktop/launch.png."*
 - *"Open ~/Pictures/team.jpg, add a dark gradient overlay at the bottom and the text 'Meet the team' in white, then save as team.psd with layers."*

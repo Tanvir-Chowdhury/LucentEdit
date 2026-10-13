@@ -33,6 +33,7 @@ Colors: any CSS color ("#7c3aed", "rgb(0 0 0 / 50%)", "white"). Fills may also b
 Text: add_text with font_family (e.g. "Inter Variable", "Georgia"), font_size in px, font_weight 100-900, width to wrap.
 Vectors: add_shape for rect/ellipse/polygon/star/line, add_path for any SVG path data (icons, logos, curves).
 Effects: update_layer {effects:{shadow:{enabled:true,color:"rgba(0,0,0,.35)",blur:30,x:0,y:12},glow:{enabled:true,color:"#a855f7",blur:30}}}.
+Assets: the user may keep a local Assets library (list_assets) with their logos, icons, photos, fonts and brand palettes; use them.
 Workflow tips: new_document (or use the open one) → build background → shapes → text → effects → render_preview to
 check your work visually → fix issues → export_document. Use batch to run many operations in one call.`;
 
@@ -473,6 +474,90 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: 'set_assets_folder', description: 'Point the Assets library at a local folder (absolute path; created with default categories if empty). Only do this when the user asks you to use a specific folder; normally they choose it in the Assets panel.',
+    inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      await L.useLibraryFolder(String(a.path));
+      return { folder: L.library.value.root, categories: L.library.value.categories };
+    },
+  },
+  {
+    name: 'list_assets', description: "Browse the user's Assets library (a local folder organized in categories: logos, icons, photos, backgrounds, textures, fonts, templates...). Filter by category and/or a search query matched against names and tags. Also returns the brand color palettes. Prefer the user's own assets and palettes when designing for them.",
+    inputSchema: { type: 'object', properties: { category: { type: 'string' }, query: { type: 'string' } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      const lib = L.library.value;
+      if (!lib.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets panel (Window > Assets).');
+      await L.refreshLibrary();
+      const q = String(a.query ?? '').toLowerCase();
+      const list = L.library.value.assets.filter((x) => (!a.category || x.category.toLowerCase() === String(a.category).toLowerCase())
+        && (!q || x.name.toLowerCase().includes(q) || x.tags.some((t) => t.toLowerCase().includes(q)) || (x.description ?? '').toLowerCase().includes(q)));
+      return {
+        folder: lib.root,
+        categories: L.library.value.categories.map((c) => ({ name: c, count: L.library.value.assets.filter((x) => x.category === c).length })),
+        assets: list.map((x) => ({ id: x.id, name: x.name, category: x.category, type: x.kind, format: x.ext, size: x.size, tags: x.tags, description: x.description, path: L.assetPath(x) })),
+        palettes: L.library.value.palettes,
+        fonts: L.libraryFonts.value,
+      };
+    },
+  },
+  {
+    name: 'get_asset_preview', description: 'See an asset from the library as a PNG image (id like "Logos/acme.svg" or just its name).',
+    inputSchema: { type: 'object', required: ['asset'], properties: { asset: { type: 'string' }, max_size: { type: 'number' } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      const x = L.findAsset(String(a.asset));
+      if (!x) throw new Error(`Asset "${a.asset}" not found. Use list_assets.`);
+      return { __image: await L.assetPreviewPNG(x, num(a.max_size, 512)), note: `${x.id} (${x.kind})` };
+    },
+  },
+  {
+    name: 'place_asset', description: 'Place a library asset into the active document as a new layer. SVG assets become editable vector layers, .lucentedit/.psd become groups. Give x/y (top-left) or center_x/center_y, and width or height (aspect kept if only one).',
+    inputSchema: { type: 'object', required: ['asset'], properties: { asset: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, center_x: { type: 'number' }, center_y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, name: { type: 'string' } } },
+    run: async (a) => {
+      need(cur());
+      const L = await import('../core/library');
+      const x = L.findAsset(String(a.asset));
+      if (!x) throw new Error(`Asset "${a.asset}" not found. Use list_assets.`);
+      const layers = await L.placeAsset(x, {
+        x: a.x == null ? undefined : num(a.x, 0), y: a.y == null ? undefined : num(a.y, 0),
+        width: a.width == null ? undefined : num(a.width, 1), height: a.height == null ? undefined : num(a.height, 1),
+        centerX: a.center_x == null ? undefined : num(a.center_x, 0), centerY: a.center_y == null ? undefined : num(a.center_y, 0),
+      });
+      if (a.name) layers.forEach((l) => (l.name = String(a.name)));
+      return layers.map(layerSummary);
+    },
+  },
+  {
+    name: 'save_asset', description: 'Save layers of the active document (default: selected layers, or the whole document) into the Assets library. format png (pixels), svg (editable vectors) or lucentedit (all layers). Creates the category if needed.',
+    inputSchema: { type: 'object', required: ['category', 'name'], properties: { category: { type: 'string' }, name: { type: 'string' }, format: { type: 'string', enum: ['png', 'svg', 'lucentedit'] }, layer_ids: { type: 'array', items: { type: 'string' } }, tags: { type: 'array', items: { type: 'string' } }, description: { type: 'string' } } },
+    run: async (a) => {
+      need(cur());
+      const L = await import('../core/library');
+      if (!L.library.value.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets panel.');
+      const x = await L.saveLayersAsAsset(String(a.category), String(a.name), a.format ?? 'png', a.layer_ids);
+      if (a.tags || a.description) await L.setAssetInfo(x, { tags: a.tags, description: a.description });
+      return { id: x.id, path: L.assetPath(x) };
+    },
+  },
+  {
+    name: 'manage_assets', description: 'Organize the library: action "create_category" (name), "tag" (asset, tags, description), "rename" (asset, name), "delete" (asset), "save_palette" (name, colors[]) for brand colors, "delete_palette" (name).',
+    inputSchema: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ['create_category', 'tag', 'rename', 'delete', 'save_palette', 'delete_palette'] }, name: { type: 'string' }, asset: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, description: { type: 'string' }, colors: { type: 'array', items: { type: 'string' } } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      if (!L.library.value.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets panel.');
+      const asset = () => { const x = L.findAsset(String(a.asset ?? '')); if (!x) throw new Error(`Asset "${a.asset}" not found`); return x; };
+      if (a.action === 'create_category') await L.createCategory(String(a.name));
+      else if (a.action === 'tag') await L.setAssetInfo(asset(), { tags: a.tags, description: a.description });
+      else if (a.action === 'rename') await L.renameAsset(asset(), String(a.name));
+      else if (a.action === 'delete') await L.deleteAsset(asset());
+      else if (a.action === 'save_palette') await L.savePalette({ name: String(a.name ?? 'Brand'), colors: (a.colors ?? []).map(String) });
+      else if (a.action === 'delete_palette') await L.deletePalette(String(a.name));
+      return { categories: L.library.value.categories, palettes: L.library.value.palettes, assets: L.library.value.assets.length };
+    },
+  },
+  {
     name: 'set_guides', description: 'Replace the document ruler guides (vertical x positions, horizontal y positions, in px). Shapes snap to guides when moved in the UI.',
     inputSchema: { type: 'object', properties: { vertical: { type: 'array', items: { type: 'number' } }, horizontal: { type: 'array', items: { type: 'number' } } } },
     run: (a) => {
@@ -653,7 +738,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.3.0' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.4.0' },
         instructions: GUIDE,
       });
     }

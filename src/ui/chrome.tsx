@@ -19,6 +19,7 @@ import { Swatch, NumField, Seg, Slider } from './controls';
 import { COMMANDS, run, prettyKeys, cmd, fitView, actualPixels } from './commands';
 import { FILTERS } from '../core/filters';
 import { selectMenu } from './selectDialogs';
+import { libraryFonts } from '../core/library';
 import { zoomAt } from '../tools';
 import { viewportSize } from './commands';
 
@@ -295,7 +296,7 @@ function SelectionButtons() {
 }
 
 export function FontSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const list = [...new Set([value, ...FONTS, ...systemFonts.value])];
+  const list = [...new Set([value, ...libraryFonts.value, ...FONTS, ...systemFonts.value])];
   return (
     <select value={value} style={{ width: 160, fontFamily: value }} onChange={(e) => {
       const v = (e.target as HTMLSelectElement).value;
@@ -357,7 +358,7 @@ function menus(): { label: string; items: MenuEntry[] }[] {
     { label: 'Filter', items: filterMenu() },
     { label: 'View', items: ['zoomIn', 'zoomOut', 'fit', 'actual', 'zoom200', '-', 'screenMode', '-', 'extras',
       { label: 'Show', items: ['showGuides', 'gridToggle'] }, '-', 'rulers', '-', 'snap', '-', 'lockGuides', 'clearGuides', 'newGuide', 'guidesFromShape'] },
-    { label: 'Window', items: ['actionsPanel', 'winHistogram', 'winHistory', 'winInfo', 'winLayers', 'winNavigator', 'winProperties', 'winSwatches', '-', 'togglePanels'] },
+    { label: 'Window', items: ['actionsPanel', 'winAssets', 'winHistogram', 'winHistory', 'winInfo', 'winLayers', 'winNavigator', 'winProperties', 'winSwatches', '-', 'togglePanels'] },
     { label: 'Help', items: ['shortcuts', 'mcp', '-', 'about'] },
   ];
 }

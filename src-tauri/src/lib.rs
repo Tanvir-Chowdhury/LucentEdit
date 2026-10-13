@@ -188,6 +188,58 @@ fn percent_decode(s: &str) -> Result<String, String> {
 }
 
 /// CLI args (minus argv[0]) that are existing files, for "Open with".
+/// One entry of a directory listing (used by the Assets library).
+#[derive(serde::Serialize)]
+struct DirEntry {
+    name: String,
+    is_dir: bool,
+    size: u64,
+    modified_ms: u64,
+}
+
+#[tauri::command]
+fn list_dir(path: String) -> Result<Vec<DirEntry>, String> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(&path).map_err(|e| format!("{path}: {e}"))? {
+        let e = e.map_err(|e| e.to_string())?;
+        let meta = e.metadata().map_err(|e| e.to_string())?;
+        let modified_ms = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        out.push(DirEntry {
+            name: e.file_name().to_string_lossy().into_owned(),
+            is_dir: meta.is_dir(),
+            size: meta.len(),
+            modified_ms,
+        });
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn make_dir(path: String) -> Result<(), String> {
+    std::fs::create_dir_all(&path).map_err(|e| format!("{path}: {e}"))
+}
+
+/// Deletes a file, or a directory with everything inside it.
+#[tauri::command]
+fn remove_path(path: String) -> Result<(), String> {
+    let p = Path::new(&path);
+    let r = if p.is_dir() { std::fs::remove_dir_all(p) } else { std::fs::remove_file(p) };
+    r.map_err(|e| format!("{path}: {e}"))
+}
+
+#[tauri::command]
+fn rename_path(from: String, to: String) -> Result<(), String> {
+    if Path::new(&to).exists() {
+        return Err(format!("{to} already exists"));
+    }
+    std::fs::rename(&from, &to).map_err(|e| format!("{from}: {e}"))
+}
+
 #[tauri::command]
 fn initial_files() -> Vec<String> {
     std::env::args().skip(1).filter(|a| Path::new(a).is_file()).collect()
@@ -207,7 +259,11 @@ pub fn run() {
             read_file,
             write_file,
             write_file_raw,
-            initial_files
+            initial_files,
+            list_dir,
+            make_dir,
+            remove_path,
+            rename_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running LucentEdit");

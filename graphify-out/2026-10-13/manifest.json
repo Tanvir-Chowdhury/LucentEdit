@@ -105,8 +105,8 @@
     "semantic_hash": ""
   },
   "src/main.tsx": {
-    "mtime": 1791894999.1653898,
-    "ast_hash": "f951a7bd8ded75601205e4aadc1202c3",
+    "mtime": 1791895110.1429343,
+    "ast_hash": "fa1f5d36c9d34472e22fc46c9e7d8fe3",
     "semantic_hash": ""
   },
   "src/mcp/bridge.ts": {
@@ -150,8 +150,8 @@
     "semantic_hash": ""
   },
   "src/ui/App.tsx": {
-    "mtime": 1791894999.1662652,
-    "ast_hash": "9a0b98a93ec21954316d99d46ad1eb99",
+    "mtime": 1791895110.143095,
+    "ast_hash": "fd37c25eca2fe72e99aac12624ff264a",
     "semantic_hash": ""
   },
   "src/ui/Viewport.tsx": {
@@ -160,8 +160,8 @@
     "semantic_hash": ""
   },
   "src/ui/chrome.tsx": {
-    "mtime": 1791894999.1665282,
-    "ast_hash": "2ef404d0c43424b0deef4df113d2ff23",
+    "mtime": 1791895110.1434295,
+    "ast_hash": "2cad0630a3f448d82995a84e36df8497",
     "semantic_hash": ""
   },
   "src/ui/commands.ts": {
@@ -600,8 +600,23 @@
     "semantic_hash": ""
   },
   "src/core/contentaware.ts": {
-    "mtime": 1791895061.232021,
-    "ast_hash": "bd424f6b86a1003962faf5bc50884b25",
+    "mtime": 1791895312.3331401,
+    "ast_hash": "18f22e994ed357cd8d8f77107c23b0b8",
+    "semantic_hash": ""
+  },
+  "src/core/contentaware.check.ts": {
+    "mtime": 1791895312.3850074,
+    "ast_hash": "394f8248e957cfe9e7851accfaaa6db2",
+    "semantic_hash": ""
+  },
+  "src/core/contentaware.worker.ts": {
+    "mtime": 1791895141.55167,
+    "ast_hash": "01eda42027656b6add9ec96867cfa6a4",
+    "semantic_hash": ""
+  },
+  "src/ui/contentAware.tsx": {
+    "mtime": 1791895271.1209316,
+    "ast_hash": "ab1ab4702afb2de58cfc4e260889e267",
     "semantic_hash": ""
   }
 }
