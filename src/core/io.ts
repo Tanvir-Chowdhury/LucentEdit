@@ -9,7 +9,7 @@ import { createDoc } from './store';
 import { shapeToPaths, pathsToD, parseSvgPath, mapPaths, normalizePaths } from './paths';
 import { newRaster } from './ops';
 
-// Files: native .lucent, PSD (via ag-psd), SVG import/export, raster images, and the
+// Files: native .lucentedit, PSD (via ag-psd), SVG import/export, raster images, and the
 // desktop (Tauri) / browser file access layer.
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -21,7 +21,7 @@ export async function tauriInvoke<T = any>(cmd: string, args?: any, opts?: any):
 
 export interface OpenedFile { name: string; bytes: Uint8Array; path?: string }
 
-export const OPEN_EXTS = ['lucent', 'psd', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif'];
+export const OPEN_EXTS = ['lucentedit', 'lucent', 'psd', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif'];
 
 export async function readPath(path: string): Promise<Uint8Array> {
   if (!isTauri) {
@@ -92,13 +92,13 @@ export async function serializeDoc(doc: Doc): Promise<Uint8Array> {
   });
   const { path, ...meta } = doc;
   void path;
-  const json = JSON.stringify({ format: 'lucent', version: 1, doc: { ...meta, layers: enc(doc.layers) } });
+  const json = JSON.stringify({ format: 'lucentedit', version: 1, doc: { ...meta, layers: enc(doc.layers) } });
   return new TextEncoder().encode(json);
 }
 
 export async function deserializeDoc(bytes: Uint8Array): Promise<Doc> {
   const data = JSON.parse(new TextDecoder().decode(bytes));
-  if (data.format !== 'lucent') throw new Error('Not a Lucent document');
+  if (data.format !== 'lucentedit' && data.format !== 'lucent') throw new Error('Not a LucentEdit document');
   const dec = async (ls: any[]): Promise<Layer[]> => Promise.all(ls.map(async (l) => {
     let o: any = l;
     if (l.type === 'raster') { const { png, ...rest } = l; o = { ...rest, canvas: await imageToCanvas(png) }; }
@@ -114,7 +114,7 @@ export async function deserializeDoc(bytes: Uint8Array): Promise<Doc> {
 
 export async function docFromFile(f: OpenedFile): Promise<Doc> {
   const ext = extOf(f.name);
-  if (ext === 'lucent') { const d = await deserializeDoc(f.bytes); d.path = f.path; return d; }
+  if (ext === 'lucentedit' || ext === 'lucent') { const d = await deserializeDoc(f.bytes); d.path = f.path; return d; }
   if (ext === 'psd') return readPsdDoc(f);
   if (ext === 'svg') {
     const { layers, width, height } = await importSvg(new TextDecoder().decode(f.bytes));
@@ -138,7 +138,7 @@ export async function layersFromFile(f: OpenedFile, doc: Doc): Promise<Layer[]> 
     refreshGroups([g]);
     return [g];
   }
-  if (ext === 'psd' || ext === 'lucent') {
+  if (ext === 'psd' || ext === 'lucentedit' || ext === 'lucent') {
     const d = await docFromFile(f);
     const g: GroupLayer = { id: uid(), name: d.name, type: 'group', children: d.layers, expanded: false, visible: true, locked: false, opacity: 1, blend: 'normal', x: 0, y: 0, w: 1, h: 1, rotation: 0 };
     refreshGroups([g]);
@@ -424,12 +424,12 @@ function elementToPathData(el: Element): string | null {
 
 // Export
 
-export type ExportFormat = 'png' | 'jpg' | 'webp' | 'svg' | 'psd' | 'lucent';
+export type ExportFormat = 'png' | 'jpg' | 'webp' | 'svg' | 'psd' | 'lucentedit';
 
 export async function exportBytes(doc: Doc, format: ExportFormat, opts: { quality?: number; scale?: number } = {}): Promise<Uint8Array> {
   if (format === 'svg') return new TextEncoder().encode(buildSvg(doc));
   if (format === 'psd') return writePsdBytes(doc);
-  if (format === 'lucent') return serializeDoc(doc);
+  if (format === 'lucentedit') return serializeDoc(doc);
   const scale = opts.scale ?? 1;
   const opaque = format === 'jpg';
   const flat = flatten(opaque && !doc.background ? { ...doc, background: '#ffffff' } : doc, scale);

@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-// Lucent MCP stdio bridge: forwards newline-delimited JSON-RPC from stdin to the running
-// Lucent desktop app (Streamable HTTP at http://127.0.0.1:47800/mcp) and prints replies.
-// Zero dependencies. Set LUCENT_MCP_URL to override the endpoint.
+// LucentEdit MCP stdio bridge: forwards newline-delimited JSON-RPC from stdin to the running
+// LucentEdit desktop app (Streamable HTTP at http://127.0.0.1:47800/mcp) and prints replies.
+// Zero dependencies. Set LUCENTEDIT_MCP_URL to override the endpoint.
 
 import { createInterface } from 'node:readline';
 
-const FIXED = process.env.LUCENT_MCP_URL;
+const FIXED = process.env.LUCENTEDIT_MCP_URL;
 let url = FIXED || null;
 
 async function findApp() {
@@ -14,14 +14,14 @@ async function findApp() {
     try {
       const r = await fetch(`http://127.0.0.1:${port}/health`, { signal: AbortSignal.timeout(400) });
       const j = await r.json();
-      if (j?.name === 'lucent') return `http://127.0.0.1:${port}/mcp`;
+      if (j?.name === 'lucentedit') return `http://127.0.0.1:${port}/mcp`;
     } catch { /* try next port */ }
   }
   return null;
 }
 
 const out = (obj) => process.stdout.write(JSON.stringify(obj) + '\n');
-const NOT_RUNNING = 'Lucent is not running. Open the Lucent app, then try again (it serves MCP on http://127.0.0.1:47800/mcp).';
+const NOT_RUNNING = 'LucentEdit is not running. Open the LucentEdit app, then try again (it serves MCP on http://127.0.0.1:47800/mcp).';
 
 async function forward(line) {
   let msg;
@@ -47,7 +47,7 @@ async function forward(line) {
   // App unreachable: still complete the handshake so the client registers the server.
   for (const m of ids) {
     if (m.method === 'initialize') {
-      out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'lucent', version: '0.1.0' }, instructions: NOT_RUNNING } });
+      out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'lucentedit', version: '0.2.0' }, instructions: NOT_RUNNING } });
     } else if (m.method === 'tools/list') {
       out({ jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'get_guide', description: NOT_RUNNING, inputSchema: { type: 'object', properties: {} } }] } });
     } else if (m.method === 'ping') {
@@ -64,5 +64,5 @@ async function forward(line) {
 let chain = Promise.resolve();
 createInterface({ input: process.stdin }).on('line', (line) => {
   if (!line.trim()) return;
-  chain = chain.then(() => forward(line)).catch((e) => process.stderr.write(`lucent-mcp: ${e?.message ?? e}\n`));
+  chain = chain.then(() => forward(line)).catch((e) => process.stderr.write(`lucentedit-mcp: ${e?.message ?? e}\n`));
 });

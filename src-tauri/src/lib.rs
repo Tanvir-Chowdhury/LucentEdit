@@ -21,10 +21,10 @@ static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
 // ---- MCP relay server -------------------------------------------------------
 
-/// Binds 127.0.0.1 on LUCENT_MCP_PORT (or 47800), then 47801..=47810, and serves
+/// Binds 127.0.0.1 on LUCENTEDIT_MCP_PORT (or 47800), then 47801..=47810, and serves
 /// each request on its own thread.
 fn start_mcp_server(app: AppHandle) {
-    let base = std::env::var("LUCENT_MCP_PORT")
+    let base = std::env::var("LUCENTEDIT_MCP_PORT")
         .ok()
         .and_then(|p| p.parse::<u16>().ok())
         .unwrap_or(DEFAULT_PORT);
@@ -34,11 +34,11 @@ fn start_mcp_server(app: AppHandle) {
         .into_iter()
         .find_map(|p| Server::http(("127.0.0.1", p)).ok().map(|s| (s, p)))
     else {
-        eprintln!("lucent: MCP relay could not bind any port");
+        eprintln!("lucentedit: MCP relay could not bind any port");
         return;
     };
     PORT.store(port, Ordering::SeqCst);
-    eprintln!("lucent: MCP relay listening on http://127.0.0.1:{port}/mcp");
+    eprintln!("lucentedit: MCP relay listening on http://127.0.0.1:{port}/mcp");
 
     std::thread::spawn(move || {
         for req in server.incoming_requests() {
@@ -84,7 +84,7 @@ fn handle(app: AppHandle, mut req: Request, port: u16) {
         (Method::Get, "/mcp") => Response::from_string("Method Not Allowed").with_status_code(405),
         (Method::Delete, "/mcp") => Response::from_string("").with_status_code(200),
         (Method::Get, "/health") => {
-            Response::from_string(format!(r#"{{"name":"lucent","ok":true,"port":{port}}}"#))
+            Response::from_string(format!(r#"{{"name":"lucentedit","ok":true,"port":{port}}}"#))
                 .with_header(json_header())
         }
         _ => Response::from_string("Not Found").with_status_code(404),
@@ -110,7 +110,7 @@ fn relay(app: &AppHandle, body: String) -> Response<std::io::Cursor<Vec<u8>>> {
         Err(_) => {
             PENDING.lock().unwrap().remove(&id);
             Response::from_string(
-                r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"Lucent app did not respond"}}"#,
+                r#"{"jsonrpc":"2.0","id":null,"error":{"code":-32000,"message":"LucentEdit app did not respond"}}"#,
             )
             .with_status_code(504)
             .with_header(json_header())
@@ -210,5 +210,5 @@ pub fn run() {
             initial_files
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Lucent");
+        .expect("error while running LucentEdit");
 }

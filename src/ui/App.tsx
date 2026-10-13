@@ -4,7 +4,9 @@ import { useTick, usePaint } from '../core/store';
 import { toolById, toolShortcut } from '../tools';
 import { textEditing } from '../tools/types';
 import { beginTextEdit } from '../tools/vector';
-import { MenuBar, OptionsBar, Toolbar, Tabs, StatusBar, Tooltip } from './chrome';
+import { MenuBar, OptionsBar, Toolbar, Tabs, StatusBar, Tooltip, ToolFlyout } from './chrome';
+import { SelectDialogs } from './selectDialogs';
+import { PsDialogs, numberKey, ui } from './psCommands';
 import { Panels } from './panels';
 import { Viewport, spaceDown } from './Viewport';
 import { Dialogs, PresetCard, PRESETS, askConfirm } from './dialogs';
@@ -30,6 +32,7 @@ function onKeyDown(e: KeyboardEvent) {
   }
   const t = toolById(tool.value).tool;
   if (t.key?.(e)) { e.preventDefault(); return; }
+  if (e.key === 'Escape' && ui.value.screen) { ui.value = { ...ui.value, screen: 0 }; return; }
   // Ctrl+V is handled by the paste event so system-clipboard images work.
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') return;
   const c = matchShortcut(e);
@@ -43,6 +46,12 @@ function onKeyDown(e: KeyboardEvent) {
     const b = brush.value;
     const step = b.size < 10 ? 1 : b.size < 50 ? 5 : b.size < 200 ? 10 : 25;
     brush.value = { ...b, size: Math.max(1, Math.min(1000, b.size + (e.key === ']' ? step : -step))) };
+    return;
+  }
+  if (/^Digit[0-9]$/.test(e.code)) { numberKey(+e.code.slice(5), e.shiftKey); return; }
+  if (e.key === '{' || e.key === '}') {
+    const b = brush.value;
+    brush.value = { ...b, hardness: Math.max(0, Math.min(1, b.hardness + (e.key === '}' ? 0.25 : -0.25))) };
     return;
   }
   if (e.key.startsWith('Arrow') && cur()?.selected.length) {
@@ -88,7 +97,7 @@ function Welcome() {
         <div class="hero">
           <img src="/logo.svg" alt="" />
           <div>
-            <h1>Welcome to <span>Lucent</span></h1>
+            <h1>Welcome to <span>LucentEdit</span></h1>
             <p>Photo editing and vector design in one fast, free app, ready for AI agents.</p>
           </div>
         </div>
@@ -146,7 +155,7 @@ export function App() {
           const dirty = docs.value.filter((d) => d.dirty);
           if (!dirty.length) return;
           e.preventDefault();
-          askConfirm('Quit Lucent?', `${dirty.length} document${dirty.length > 1 ? 's have' : ' has'} unsaved changes that will be lost.`, 'Quit without saving', () => w.destroy());
+          askConfirm('Quit LucentEdit?', `${dirty.length} document${dirty.length > 1 ? 's have' : ' has'} unsaved changes that will be lost.`, 'Quit without saving', () => w.destroy());
         });
       });
     }
@@ -164,7 +173,7 @@ export function App() {
 
   const hasDocs = docs.value.length > 0;
   return (
-    <div class="app">
+    <div class={`app${ui.value.panels ? '' : ' no-panels'}${ui.value.screen ? ` screen-${ui.value.screen}` : ''}`}>
       <MenuBar />
       <OptionsBar />
       <Toolbar />
@@ -175,6 +184,9 @@ export function App() {
       <Panels />
       <StatusBar />
       <Dialogs />
+      <PsDialogs />
+      <SelectDialogs />
+      <ToolFlyout />
       <ColorPickerPopover />
       <Tooltip />
       <Toasts />

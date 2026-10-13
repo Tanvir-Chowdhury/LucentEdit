@@ -86,6 +86,7 @@ function snap(r: Rect, exclude: Set<string>): { dx: number; dy: number } {
   if (!ds || !viewOpts.value.snap) return { dx: 0, dy: 0 };
   const th = 6 / view.zoom;
   const xs = [0, ds.doc.width / 2, ds.doc.width], ys = [0, ds.doc.height / 2, ds.doc.height];
+  if (viewOpts.value.guides) { xs.push(...(ds.doc.guides?.v ?? [])); ys.push(...(ds.doc.guides?.h ?? [])); }
   for (const [l] of walk(ds.doc.layers)) {
     if (exclude.has(l.id) || !l.visible || l.type === 'group') continue;
     const b = bounds(l);

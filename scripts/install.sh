@@ -1,25 +1,25 @@
 #!/usr/bin/env bash
-# Lucent installer for macOS and Linux.
+# LucentEdit installer for macOS and Linux.
 #
-#   curl -fsSL https://raw.githubusercontent.com/Tanvir-Chowdhury/lucent/main/scripts/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/Tanvir-Chowdhury/LucentEdit/main/scripts/install.sh | bash
 #
 # Options (pass after `bash -s --` when piping):
 #   --appimage   Linux only: install the portable AppImage instead of .deb/.rpm
-#   --uninstall  Remove Lucent
+#   --uninstall  Remove LucentEdit
 #   -h, --help   Show help
 set -euo pipefail
 
 # GitHub owner/repo that publishes the releases. Change this one line for forks.
-REPO="Tanvir-Chowdhury/lucent"
+REPO="Tanvir-Chowdhury/LucentEdit"
 
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 ICON_URL="https://raw.githubusercontent.com/${REPO}/main/src-tauri/icons/128x128@2x.png"
-APP_NAME="Lucent"
+APP_NAME="LucentEdit"
 
 BIN_DIR="${HOME}/.local/bin"
-APPIMAGE_PATH="${BIN_DIR}/lucent"
-DESKTOP_FILE="${HOME}/.local/share/applications/lucent.desktop"
-ICON_FILE="${HOME}/.local/share/icons/hicolor/256x256/apps/lucent.png"
+APPIMAGE_PATH="${BIN_DIR}/lucentedit"
+DESKTOP_FILE="${HOME}/.local/share/applications/lucentedit.desktop"
+ICON_FILE="${HOME}/.local/share/icons/hicolor/256x256/apps/lucentedit.png"
 
 # Colors only when writing to a terminal.
 if [ -t 1 ]; then
@@ -37,12 +37,12 @@ has()  { command -v "$1" >/dev/null 2>&1; }
 
 usage() {
   cat <<EOF
-${BOLD}Lucent installer${RESET}
+${BOLD}LucentEdit installer${RESET}
 
 Usage: install.sh [--appimage] [--uninstall]
 
-  --appimage   Linux: install the AppImage to ~/.local/bin/lucent (any distro)
-  --uninstall  Remove Lucent from this machine
+  --appimage   Linux: install the AppImage to ~/.local/bin/lucentedit (any distro)
+  --uninstall  Remove LucentEdit from this machine
   -h, --help   Show this help
 EOF
 }
@@ -65,7 +65,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Temp dir removed on any exit (also unmounts a dmg left attached on failure).
-TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t lucent)"
+TMP_DIR="$(mktemp -d 2>/dev/null || mktemp -d -t lucentedit)"
 MOUNT_POINT=""
 cleanup() {
   if [ -n "$MOUNT_POINT" ] && [ -d "$MOUNT_POINT" ]; then
@@ -164,7 +164,7 @@ uninstall_macos() {
       removed=1
     fi
   done
-  if [ "$removed" -eq 1 ]; then ok "Lucent removed"; else warn "Lucent.app was not found"; fi
+  if [ "$removed" -eq 1 ]; then ok "LucentEdit removed"; else warn "LucentEdit.app was not found"; fi
 }
 
 # ---------- Linux ----------
@@ -210,20 +210,20 @@ install_appimage() {
   cat > "$DESKTOP_FILE" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Lucent
+Name=LucentEdit
 GenericName=Image & Vector Editor
 Comment=Lightweight open-source Photoshop + Illustrator alternative
 Exec=${APPIMAGE_PATH} %f
 Icon=${ICON_FILE}
 Terminal=false
 Categories=Graphics;2DGraphics;RasterGraphics;VectorGraphics;
-MimeType=application/x-lucent;image/png;image/jpeg;image/webp;image/svg+xml;image/vnd.adobe.photoshop;
-StartupWMClass=lucent
+MimeType=application/x-lucentedit;image/png;image/jpeg;image/webp;image/svg+xml;image/vnd.adobe.photoshop;
+StartupWMClass=lucentedit
 EOF
   if has update-desktop-database; then update-desktop-database "$(dirname "$DESKTOP_FILE")" >/dev/null 2>&1 || true; fi
 
   if ! has fusermount && ! has fusermount3; then
-    warn "FUSE not found. AppImages need libfuse2 (or run: lucent --appimage-extract-and-run)"
+    warn "FUSE not found. AppImages need libfuse2 (or run: lucentedit --appimage-extract-and-run)"
   fi
   case ":${PATH}:" in
     *":${BIN_DIR}:"*) ;;
@@ -244,7 +244,7 @@ install_linux() {
   else
     install_appimage
   fi
-  ok "Done. Launch ${BOLD}Lucent${RESET} from your app menu or run ${BOLD}lucent${RESET}"
+  ok "Done. Launch ${BOLD}LucentEdit${RESET} from your app menu or run ${BOLD}lucentedit${RESET}"
 }
 
 uninstall_linux() {
@@ -254,23 +254,23 @@ uninstall_linux() {
     rm -f "$APPIMAGE_PATH" "$DESKTOP_FILE" "$ICON_FILE"
     removed=1
   fi
-  if has dpkg && dpkg -s lucent >/dev/null 2>&1; then
-    info "Removing lucent .deb package"
-    if has apt-get; then ${SUDO} apt-get remove -y lucent; else ${SUDO} dpkg -r lucent; fi
+  if has dpkg && dpkg -s lucentedit >/dev/null 2>&1; then
+    info "Removing lucentedit .deb package"
+    if has apt-get; then ${SUDO} apt-get remove -y lucentedit; else ${SUDO} dpkg -r lucentedit; fi
     removed=1
-  elif has rpm && rpm -q lucent >/dev/null 2>&1; then
-    info "Removing lucent .rpm package"
-    if has dnf; then ${SUDO} dnf remove -y lucent
-    elif has zypper; then ${SUDO} zypper --non-interactive remove lucent
-    else ${SUDO} yum remove -y lucent; fi
+  elif has rpm && rpm -q lucentedit >/dev/null 2>&1; then
+    info "Removing lucentedit .rpm package"
+    if has dnf; then ${SUDO} dnf remove -y lucentedit
+    elif has zypper; then ${SUDO} zypper --non-interactive remove lucentedit
+    else ${SUDO} yum remove -y lucentedit; fi
     removed=1
   fi
-  if [ "$removed" -eq 1 ]; then ok "Lucent removed"; else warn "Lucent does not appear to be installed"; fi
+  if [ "$removed" -eq 1 ]; then ok "LucentEdit removed"; else warn "LucentEdit does not appear to be installed"; fi
 }
 
 # ---------- main ----------
 
-printf '\n%s  Lucent%s %sfree, open-source image & vector editor%s\n\n' "$BOLD" "$RESET" "$DIM" "$RESET"
+printf '\n%s  LucentEdit%s %sfree, open-source image & vector editor%s\n\n' "$BOLD" "$RESET" "$DIM" "$RESET"
 
 case "$(uname -s)" in
   Darwin)
@@ -282,6 +282,6 @@ case "$(uname -s)" in
 esac
 
 if [ "$UNINSTALL" -eq 0 ]; then
-  printf '\n   AI agents: while Lucent runs, MCP is served at %shttp://127.0.0.1:47800/mcp%s\n' "$BOLD" "$RESET"
+  printf '\n   AI agents: while LucentEdit runs, MCP is served at %shttp://127.0.0.1:47800/mcp%s\n' "$BOLD" "$RESET"
   printf '   Docs: https://github.com/%s#use-with-ai-agents-mcp\n\n' "$REPO"
 fi

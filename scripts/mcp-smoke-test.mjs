@@ -1,12 +1,12 @@
 #!/usr/bin/env node
-// End-to-end MCP check against a running Lucent app: builds a small design, renders a
-// preview and exports PNG/SVG/PSD/.lucent into a temp folder. Usage: npm run test:mcp
+// End-to-end MCP check against a running LucentEdit app: builds a small design, renders a
+// preview and exports PNG/SVG/PSD/.lucentedit into a temp folder. Usage: npm run test:mcp
 
 import { mkdtempSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const url = process.env.LUCENT_MCP_URL ?? 'http://127.0.0.1:47800/mcp';
+const url = process.env.LUCENTEDIT_MCP_URL ?? 'http://127.0.0.1:47800/mcp';
 let id = 0;
 
 async function rpc(method, params) {
@@ -23,13 +23,13 @@ async function tool(name, args = {}) {
   return c.type === 'text' ? (() => { try { return JSON.parse(c.text); } catch { return c.text; } })() : c;
 }
 
-const out = mkdtempSync(join(tmpdir(), 'lucent-smoke-'));
+const out = mkdtempSync(join(tmpdir(), 'lucentedit-smoke-'));
 const checks = [];
 const check = (name, ok) => { checks.push([name, ok]); console.log(`${ok ? 'PASS' : 'FAIL'}  ${name}`); };
 
 try {
   const init = await rpc('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'smoke', version: '1' } });
-  check('initialize', init.serverInfo?.name === 'lucent');
+  check('initialize', init.serverInfo?.name === 'lucentedit');
   const { tools } = await rpc('tools/list');
   check(`tools/list (${tools.length} tools)`, tools.length >= 25);
 
@@ -51,7 +51,7 @@ try {
   check('apply_filter rasterizes vector layer', filtered.type === 'raster');
   const prev = await tool('render_preview', { max_size: 256 });
   check('render_preview returns image', prev.type === 'image' && prev.data.length > 1000);
-  for (const format of ['png', 'svg', 'psd', 'lucent']) {
+  for (const format of ['png', 'svg', 'psd', 'lucentedit']) {
     const path = join(out, `smoke.${format}`);
     await tool('export_document', { format, path });
     check(`export ${format}`, statSync(path).size > 100);

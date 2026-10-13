@@ -29,7 +29,7 @@ const MAP: Record<string, any> = {
   ad: Megaphone, gem: Gem,
 };
 
-export function Icon({ name, size = 16, stroke = 1.75 }: { name: string; size?: number; stroke?: number }) {
-  const C = MAP[name] ?? Square;
+export function Icon({ name, size = 16, stroke = 1.75 }: { name: string | any; size?: number; stroke?: number }) {
+  const C = typeof name === 'string' ? MAP[name] ?? Square : name;
   return <C size={size} strokeWidth={stroke} />;
 }

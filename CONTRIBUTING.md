@@ -1,12 +1,12 @@
-# Contributing to Lucent
+# Contributing to LucentEdit
 
-Thanks for helping make Lucent better. Bug reports, feature ideas, docs fixes and code are all welcome.
+Thanks for helping make LucentEdit better. Bug reports, feature ideas, docs fixes and code are all welcome.
 
 ## How contributions work
 
 `main` is protected: nobody can push to it directly. Every change goes through a pull request that passes CI and is approved by the maintainer.
 
-- **Found a bug or have an idea?** [Open an issue](https://github.com/Tanvir-Chowdhury/lucent/issues/new/choose). It can be picked up and solved later by you or anyone else.
+- **Found a bug or have an idea?** [Open an issue](https://github.com/Tanvir-Chowdhury/LucentEdit/issues/new/choose). It can be picked up and solved later by you or anyone else.
 - **Want to fix or build something?** Comment on the issue so others know you're on it, then:
   1. Fork the repo and clone your fork.
   2. Create a branch from `main`: `git checkout -b fix/short-description` (or `feat/...`, `docs/...`).
@@ -30,12 +30,12 @@ Thanks for helping make Lucent better. Bug reports, feature ideas, docs fixes an
 
 ## Guidelines
 
-- Lucent targets low-spec machines. Avoid heavy dependencies; prefer the platform (Canvas2D, Web APIs) over libraries.
+- LucentEdit targets low-spec machines. Avoid heavy dependencies; prefer the platform (Canvas2D, Web APIs) over libraries.
 - Match Photoshop/Illustrator behavior and shortcuts where it makes sense, so users feel at home.
 - Be kind in issues and reviews.
 
 ## Reporting bugs
 
-Use the [bug report template](https://github.com/Tanvir-Chowdhury/lucent/issues/new?template=bug_report.md) and include your OS, Lucent version and steps to reproduce.
+Use the [bug report template](https://github.com/Tanvir-Chowdhury/LucentEdit/issues/new?template=bug_report.md) and include your OS, LucentEdit version and steps to reproduce.
 
 By contributing, you agree that your contributions are licensed under the [MIT License](LICENSE).

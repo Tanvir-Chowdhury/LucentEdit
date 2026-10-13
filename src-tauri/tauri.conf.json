@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Lucent",
-  "version": "0.1.0",
-  "identifier": "app.lucent.studio",
+  "productName": "LucentEdit",
+  "version": "0.2.0",
+  "identifier": "app.lucentedit.studio",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Lucent",
+        "title": "LucentEdit",
         "width": 1440,
         "height": 900,
         "minWidth": 1024,
@@ -38,13 +38,13 @@
     ],
     "category": "GraphicsAndDesign",
     "shortDescription": "Lightweight image and vector editor",
-    "longDescription": "Lucent is a lightweight, open-source alternative to Photoshop and Illustrator with layered raster editing, vector tools, and a local MCP endpoint for AI-assisted workflows.",
+    "longDescription": "LucentEdit is a lightweight, open-source alternative to Photoshop and Illustrator with layered raster editing, vector tools, and a local MCP endpoint for AI-assisted workflows.",
     "fileAssociations": [
       {
-        "ext": ["lucent"],
-        "name": "Lucent Document",
-        "description": "Lucent Document",
-        "mimeType": "application/x-lucent",
+        "ext": ["lucentedit"],
+        "name": "LucentEdit Document",
+        "description": "LucentEdit Document",
+        "mimeType": "application/x-lucentedit",
         "role": "Editor"
       }
     ],

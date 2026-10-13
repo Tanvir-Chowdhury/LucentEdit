@@ -4,7 +4,7 @@ import {
   uid, makeCanvas, ctx2d, cloneCanvas, findLayer, containerOf, walk, bounds, unionRects,
   duplicateLayer, refreshGroups, layerMatrix, Rect,
 } from './util';
-import { fitText, drawLayer } from './render';
+import { fitText, drawLayer, drawLayers } from './render';
 import { normalizePaths, shapeToPaths, shapePath2D } from './paths';
 
 // Layer operations shared by the UI and the MCP server. Functions mutate the current
@@ -251,6 +251,7 @@ export function rasterize(l: Layer, ds: DocState | null = cur()): RasterLayer | 
 export function editablePixels(l: Layer | null, ds: DocState | null = cur()): RasterLayer | null {
   if (!l || !ds) return null;
   if (l.locked) { toast('Layer is locked', 'error'); return null; }
+  if (l.type === 'adjust') { toast('Adjustment layers have no pixels: paint on its mask or another layer', 'error'); return null; }
   let r = l as RasterLayer;
   if (l.type !== 'raster') {
     r = rasterize(l, ds)!;
@@ -269,8 +270,8 @@ export function mergeDown(ds: DocState | null = cur()) {
   const below = arr[i - 1];
   if (!below) return toast('No layer below to merge with', 'error');
   const c = makeCanvas(ds.doc.width, ds.doc.height), x = ctx2d(c);
-  drawLayer(x, { ...below, visible: true } as Layer);
-  drawLayer(x, { ...top, visible: true } as Layer);
+  // drawLayers (not drawLayer) so an adjustment layer on top is baked into the merge.
+  drawLayers(x, [{ ...below, visible: true, clip: undefined } as Layer, { ...top, visible: true } as Layer]);
   const r = newRaster(ds, below.name, c);
   arr.splice(i - 1, 2, r);
   ds.selected = [r.id];
@@ -280,7 +281,7 @@ export function mergeDown(ds: DocState | null = cur()) {
 export function flattenImage(ds: DocState | null = cur()) {
   if (!ds) return;
   const c = makeCanvas(ds.doc.width, ds.doc.height), x = ctx2d(c);
-  for (const l of ds.doc.layers) drawLayer(x, l);
+  drawLayers(x, ds.doc.layers);
   const r = newRaster(ds, 'Background', c);
   ds.doc.layers = [r];
   ds.selected = [r.id];
@@ -360,6 +361,11 @@ export function distribute(layers: Layer[], axis: 'h' | 'v') {
   touch();
 }
 
+/** Adjustment layers always cover the whole document. */
+export function fitAdjustments(ds: DocState) {
+  for (const [l] of walk(ds.doc.layers)) if (l.type === 'adjust') Object.assign(l, { x: 0, y: 0, w: ds.doc.width, h: ds.doc.height });
+}
+
 export function cropDoc(r: Rect, ds: DocState | null = cur()) {
   if (!ds) return;
   const x = Math.round(r.x), y = Math.round(r.y);
@@ -367,6 +373,7 @@ export function cropDoc(r: Rect, ds: DocState | null = cur()) {
   ds.doc.width = Math.max(1, Math.round(r.w));
   ds.doc.height = Math.max(1, Math.round(r.h));
   ds.mask = null;
+  fitAdjustments(ds);
   commit('Crop', ds);
 }
 
@@ -377,6 +384,7 @@ export function resizeCanvas(w: number, h: number, anchor: [number, number] = [0
   for (const l of ds.doc.layers) moveLayer(l, dx, dy);
   ds.doc.width = Math.max(1, Math.round(w)); ds.doc.height = Math.max(1, Math.round(h));
   ds.mask = null;
+  fitAdjustments(ds);
   commit('Canvas Size', ds);
 }
 
@@ -387,6 +395,7 @@ export function resizeImage(w: number, h: number, ds: DocState | null = cur()) {
   for (const l of ds.doc.layers) scaleLayer(l, sx, sy, 0, 0);
   ds.doc.width = Math.max(1, Math.round(w)); ds.doc.height = Math.max(1, Math.round(h));
   ds.mask = null;
+  fitAdjustments(ds);
   commit('Image Size', ds);
 }
 
@@ -422,6 +431,7 @@ export function transformCanvas(kind: 'cw' | 'ccw' | '180' | 'flipH' | 'flipV', 
   ds.doc.layers.forEach(mapLayer);
   if (kind === 'cw' || kind === 'ccw') { ds.doc.width = H; ds.doc.height = W; }
   ds.mask = null;
+  fitAdjustments(ds);
   commit(kind.startsWith('flip') ? 'Flip Canvas' : 'Rotate Canvas', ds);
 }
 
@@ -508,7 +518,7 @@ export function layerAt(x: number, y: number, ds: DocState | null = cur(), deep 
   const hit = (arr: Layer[]): Layer | null => {
     for (let i = arr.length - 1; i >= 0; i--) {
       const l = arr[i];
-      if (!l.visible) continue;
+      if (!l.visible || l.type === 'adjust') continue;
       if (l.type === 'group') {
         const h = hit(l.children);
         if (h) return deep ? h : l;

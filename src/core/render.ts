@@ -1,10 +1,14 @@
-import type { Doc, Layer, Paint, ShapeLayer, TextLayer, Stroke } from './types';
+import type { Doc, Layer, Paint, ShapeLayer, TextLayer, Stroke, AdjustLayer } from './types';
 import { shapePath2D } from './paths';
 import { layerMatrix, makeCanvas, ctx2d } from './util';
 
 // Canvas2D renderer shared by the viewport, thumbnails, export and MCP previews.
 
-export const renderHooks = { hideId: null as string | null };
+export const renderHooks = {
+  hideId: null as string | null,
+  /** Set by filters.ts: runs a point filter on pixels (kept as a hook to avoid an import cycle). */
+  adjust: null as null | ((img: ImageData, filter: string, params: Record<string, any>) => void),
+};
 
 export function fontString(l: Pick<TextLayer, 'italic' | 'weight' | 'size' | 'family'>) {
   const fam = /[\s,]/.test(l.family) && !/["']/.test(l.family) && !l.family.includes(',') ? `"${l.family}"` : l.family;
@@ -190,9 +194,46 @@ function composite(ctx: CanvasRenderingContext2D, off: HTMLCanvasElement, opacit
 }
 
 /** Draw a stack bottom-to-top, handling clipping masks (clipped layers show only over their base). */
+/** Apply an adjustment layer to what is already drawn in ctx, inside its box, mask and opacity. */
+let adjustScratch: HTMLCanvasElement | null = null;
+
+/**
+ * Apply an adjustment layer to what is already drawn in ctx. Only the device-space area of the
+ * layer's box (the document) is read back, and one scratch canvas is reused across frames.
+ */
+function applyAdjust(ctx: CanvasRenderingContext2D, l: AdjustLayer) {
+  if (!l.visible || l.opacity <= 0 || !renderHooks.adjust) return;
+  const m = ctx.getTransform();
+  const pts = [[l.x, l.y], [l.x + l.w, l.y], [l.x + l.w, l.y + l.h], [l.x, l.y + l.h]].map(([x, y]) => m.transformPoint({ x, y }));
+  const x0 = Math.max(0, Math.floor(Math.min(...pts.map((p) => p.x)))), y0 = Math.max(0, Math.floor(Math.min(...pts.map((p) => p.y))));
+  const x1 = Math.min(ctx.canvas.width, Math.ceil(Math.max(...pts.map((p) => p.x)))), y1 = Math.min(ctx.canvas.height, Math.ceil(Math.max(...pts.map((p) => p.y))));
+  const w = x1 - x0, h = y1 - y0;
+  if (w <= 0 || h <= 0) return;
+  const img = ctx.getImageData(x0, y0, w, h);
+  renderHooks.adjust(img, l.filter, l.params);
+  if (!adjustScratch || adjustScratch.width < w || adjustScratch.height < h) adjustScratch = makeCanvas(Math.max(w, adjustScratch?.width ?? 0), Math.max(h, adjustScratch?.height ?? 0));
+  const a = ctx2d(adjustScratch);
+  a.setTransform(1, 0, 0, 1, 0, 0);
+  a.globalCompositeOperation = 'copy';
+  a.putImageData(img, 0, 0);
+  if (l.mask?.enabled) {
+    a.setTransform(new DOMMatrix().translateSelf(-x0, -y0).multiplySelf(m));
+    a.globalCompositeOperation = 'destination-in';
+    a.drawImage(l.mask.canvas, l.mask.x, l.mask.y);
+  }
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.globalAlpha *= l.opacity;
+  ctx.globalCompositeOperation = l.blend === 'normal' ? 'source-over' : l.blend;
+  // The caller's clip (document bounds) keeps the workspace around the page untouched.
+  ctx.drawImage(adjustScratch, 0, 0, w, h, x0, y0, w, h);
+  ctx.restore();
+}
+
 export function drawLayers(ctx: CanvasRenderingContext2D, layers: Layer[]) {
   for (let i = 0; i < layers.length; i++) {
     const base = layers[i];
+    if (base.type === 'adjust') { applyAdjust(ctx, base); continue; }
     let j = i + 1;
     while (j < layers.length && layers[j].clip) j++;
     if (j === i + 1 || !base.visible) {
@@ -205,6 +246,7 @@ export function drawLayers(ctx: CanvasRenderingContext2D, layers: Layer[]) {
       for (let k = i + 1; k < j; k++) {
         const c = layers[k];
         if (!c.visible) continue;
+        if (c.type === 'adjust') { applyAdjust(o, c); continue; }
         // source-atop keeps the base's alpha: clipped layers only paint over the base.
         const clipped = isolate(o, (x) => drawLayer(x, { ...c, blend: 'normal' } as Layer));
         o.save();
@@ -237,6 +279,12 @@ export function renderDoc(ctx: CanvasRenderingContext2D, doc: Doc, opts: { check
   } else if (opts.checker) {
     ctx.fillStyle = checkerPattern(ctx);
     ctx.fillRect(0, 0, doc.width, doc.height);
+    // Adjustments must not tint the transparency checkerboard: render the stack in isolation.
+    if (doc.layers.some((l) => l.type === 'adjust')) {
+      composite(ctx, isolate(ctx, (o) => drawLayers(o, doc.layers)), 1, 'normal');
+      ctx.restore();
+      return;
+    }
   }
   drawLayers(ctx, doc.layers);
   ctx.restore();

@@ -66,7 +66,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: 'v__VERSION__'
-          releaseName: 'Lucent v__VERSION__'
+          releaseName: 'LucentEdit v__VERSION__'
           releaseBody: |
             Free, open-source image & vector editor with a built-in MCP server.
 

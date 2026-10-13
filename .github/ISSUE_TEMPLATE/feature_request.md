@@ -13,7 +13,7 @@ Describe the task or workflow, not just the button.
 Optional, but helps us match familiar behavior and shortcuts.
 
 **Proposed solution**
-What you would like Lucent (or its MCP tools) to do.
+What you would like LucentEdit (or its MCP tools) to do.
 
 **Anything else**
 Mockups, references, alternatives considered.

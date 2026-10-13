@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { dialog, cur, commit, touch, activeLayer, mcpStatus, toast } from '../core/store';
+import { dialog, cur, commit, touch, activeLayer, mcpStatus, toast, fg, bg } from '../core/store';
 import { filterById, defaultParams, applyFilter } from '../core/filters';
 import { resizeImage, resizeCanvas, rasterize } from '../core/ops';
 import { featherSelection } from '../core/selection';
@@ -7,8 +7,10 @@ import { exportBytes, saveAs, ExportFormat, isTauri } from '../core/io';
 import { flatten } from '../core/render';
 import type { RasterLayer } from '../core/types';
 import { Icon } from './icons';
+import { TOOLS } from '../tools';
 import { NumField, Swatch } from './controls';
-import { COMMANDS, prettyKeys, newDocument, run } from './commands';
+import { CurvesEditor } from './CurvesEditor';
+import { COMMANDS, prettyKeys, newDocument, run, lastFilter } from './commands';
 
 export const PRESETS = [
   { name: 'Instagram Post', w: 1080, h: 1080, icon: 'phone' },
@@ -112,7 +114,7 @@ function ExportDialog() {
             <option value="webp">WebP (web, small)</option>
             <option value="svg">SVG (vector)</option>
             <option value="psd">PSD (Photoshop, layered)</option>
-            <option value="lucent">Lucent document</option>
+            <option value="lucentedit">LucentEdit document</option>
           </select>
           {raster && <><label>Scale</label><select value={String(scale)} onChange={(e) => setScale(+(e.target as HTMLSelectElement).value)}>{[0.25, 0.5, 1, 2, 3, 4].map((s) => <option value={s}>{s}× · {Math.round(ds.doc.width * s)} × {Math.round(ds.doc.height * s)}</option>)}</select></>}
           {(fmt === 'jpg' || fmt === 'webp') && <><label>Quality</label><div class="row"><input type="range" min={10} max={100} value={q} onInput={(e) => setQ(+(e.target as HTMLInputElement).value)} /><b>{q}</b></div></>}
@@ -123,7 +125,7 @@ function ExportDialog() {
             {fmt === 'png' && 'Best for UI, graphics and anything with transparency.'}
             {fmt === 'jpg' && 'Transparent areas become white.'}
             {fmt === 'webp' && 'Modern web format with transparency and small files.'}
-            {fmt === 'lucent' && 'Full editable document for reopening in Lucent.'}
+            {fmt === 'lucentedit' && 'Full editable document for reopening in LucentEdit.'}
           </div>
         </div>
       </div>
@@ -135,13 +137,19 @@ function FilterDialog({ id }: { id: string }) {
   const f = filterById(id)!;
   const ds = cur()!;
   const layer = activeLayer(ds)!;
-  const [params, setParams] = useState(defaultParams(f));
+  // Color params named fg/bg (Clouds, Fibers) start from the current foreground/background colors.
+  const [params, setParams] = useState<Record<string, any>>(() => {
+    const d = defaultParams(f);
+    if ('fg' in d) d.fg = fg.value;
+    if ('bg' in d) d.bg = bg.value;
+    return d;
+  });
   const [previewOn, setPreviewOn] = useState(true);
   const orig = useRef<{ layer: RasterLayer; canvas: HTMLCanvasElement } | null>(null);
   const timer = useRef(0);
 
   // Live preview: always filter from the untouched original pixels.
-  const preview = (p: Record<string, number>, on = previewOn) => {
+  const preview = (p: Record<string, any>, on = previewOn) => {
     clearTimeout(timer.current);
     timer.current = window.setTimeout(() => {
       if (!orig.current) {
@@ -155,6 +163,7 @@ function FilterDialog({ id }: { id: string }) {
     }, 30);
   };
   useEffect(() => { preview(params); }, []);
+  const set = (k: string, v: number | string | boolean) => { const n = { ...params, [k]: v }; setParams(n); preview(n); };
 
   const cancel = () => {
     clearTimeout(timer.current);
@@ -165,6 +174,7 @@ function FilterDialog({ id }: { id: string }) {
   const ok = () => {
     clearTimeout(timer.current);
     if (orig.current) applyFilter(ds, orig.current.layer, f, params, orig.current.canvas);
+    Object.assign(lastFilter, { id: f.id, params });
     commit(f.name, ds);
     dialog.value = null;
   };
@@ -173,11 +183,16 @@ function FilterDialog({ id }: { id: string }) {
       <div class="dialog" onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Enter') ok(); if (e.key === 'Escape') cancel(); }}>
         <div class="dialog-head"><div>{f.name}<span class="sub">{layer.name}{ds.mask ? ' · inside selection' : ''}</span></div><button class="icon-btn" onClick={cancel}><Icon name="x" /></button></div>
         <div class="dialog-body">
-          {f.params.map((p) => (
+          {f.custom === 'curves' ? <CurvesEditor params={params} onChange={set} /> : f.params.map((p) => (
             <div class="slider-row">
               <label>{p.label}</label>
-              <input type="range" min={p.min} max={p.max} step={p.step ?? 1} value={params[p.key]} onInput={(e) => { const n = { ...params, [p.key]: +(e.target as HTMLInputElement).value }; setParams(n); preview(n); }} />
-              <NumField value={params[p.key]} min={p.min} max={p.max} step={p.step ?? 1} unit={p.unit} onChange={(v) => { const n = { ...params, [p.key]: v }; setParams(n); preview(n); }} />
+              {p.type === 'select' ? <select style={{ gridColumn: 'span 2' }} value={String(params[p.key])} onChange={(e) => set(p.key, (e.target as HTMLSelectElement).value)}>{p.options?.map((o) => <option value={o}>{o}</option>)}</select>
+                : p.type === 'checkbox' ? <input type="checkbox" style={{ justifySelf: 'start' }} checked={!!params[p.key]} onChange={(e) => set(p.key, (e.target as HTMLInputElement).checked)} />
+                : p.type === 'color' ? <Swatch value={String(params[p.key])} onChange={(c) => set(p.key, c)} />
+                : <>
+                  <input type="range" min={p.min} max={p.max} step={p.step ?? 1} value={+params[p.key]} onInput={(e) => set(p.key, +(e.target as HTMLInputElement).value)} />
+                  <NumField value={+params[p.key]} min={p.min} max={p.max} step={p.step ?? 1} unit={p.unit} onChange={(v) => set(p.key, v)} />
+                </>}
             </div>
           ))}
         </div>
@@ -249,21 +264,21 @@ function McpDialog() {
   const port = st.port || 47800;
   const url = `http://127.0.0.1:${port}/mcp`;
   return (
-    <Dialog title="Connect AI Agents (MCP)" sub="Let Claude Code, Cursor, Codex, VS Code and other agents design with Lucent" wide foot={<button class="btn primary" onClick={() => (dialog.value = null)}>Done</button>}>
+    <Dialog title="Connect AI Agents (MCP)" sub="Let Claude Code, Cursor, Codex, VS Code and other agents design with LucentEdit" wide foot={<button class="btn primary" onClick={() => (dialog.value = null)}>Done</button>}>
       <div class="row" style={{ marginBottom: 12 }}>
         <span class={`dot${st.enabled ? ' on' : ''}`} />
         {st.enabled
-          ? <span>MCP server is running at <b>{url}</b>. Keep Lucent open while your agent works.</span>
-          : <span>{isTauri ? 'MCP server is starting…' : 'The MCP server runs in the Lucent desktop app. Install it to connect agents.'}</span>}
+          ? <span>MCP server is running at <b>{url}</b>. Keep LucentEdit open while your agent works.</span>
+          : <span>{isTauri ? 'MCP server is starting…' : 'The MCP server runs in the LucentEdit desktop app. Install it to connect agents.'}</span>}
       </div>
       <b>Claude Code</b>
-      <Code text={`claude mcp add --transport http lucent ${url}`} />
+      <Code text={`claude mcp add --transport http lucentedit ${url}`} />
       <b>Cursor / Windsurf / VS Code (mcp.json)</b>
-      <Code text={JSON.stringify({ mcpServers: { lucent: { url } } }, null, 2)} />
+      <Code text={JSON.stringify({ mcpServers: { lucentedit: { url } } }, null, 2)} />
       <b>Codex CLI, Claude Desktop & other stdio clients</b>
-      <Code text={JSON.stringify({ mcpServers: { lucent: { command: 'npx', args: ['-y', 'lucent-mcp'], env: { LUCENT_MCP_URL: url } } } }, null, 2)} />
+      <Code text={JSON.stringify({ mcpServers: { lucentedit: { command: 'npx', args: ['-y', 'lucentedit-mcp'], env: { LUCENTEDIT_MCP_URL: url } } } }, null, 2)} />
       <div style={{ color: 'var(--muted)', lineHeight: 1.6 }}>
-        Try asking your agent: <i>“Using Lucent, design a 1080×1080 Instagram post announcing our summer sale with a gradient background, bold headline and a call-to-action button, then export it as PNG.”</i>
+        Try asking your agent: <i>“Using LucentEdit, design a 1080×1080 Instagram post announcing our summer sale with a gradient background, bold headline and a call-to-action button, then export it as PNG.”</i>
         The agent can see its work through the <code>render_preview</code> tool and every action is undoable here with <kbd>Ctrl</kbd>+<kbd>Z</kbd>.
       </div>
     </Dialog>
@@ -271,7 +286,8 @@ function McpDialog() {
 }
 
 function ShortcutsDialog() {
-  const tools: [string, string][] = [['Move', 'V'], ['Marquee (Shift cycles)', 'M'], ['Lasso', 'L'], ['Magic Wand', 'W'], ['Crop', 'C'], ['Eyedropper', 'I'], ['Brush', 'B'], ['Eraser', 'E'], ['Bucket / Gradient', 'G'], ['Type', 'T'], ['Pen', 'P'], ['Direct Selection', 'A'], ['Shapes (Shift cycles)', 'U'], ['Hand (hold Space)', 'H'], ['Zoom', 'Z'], ['Brush size', '[ ]'], ['Nudge (Shift ×10)', 'Arrows']];
+  // Every registered tool with its Photoshop letter (Shift+letter cycles the group).
+  const tools: [string, string][] = [...TOOLS.filter((t) => t.key).map((t): [string, string] => [t.label, t.key]), ['Brush size / hardness', '[ ] { }'], ['Opacity / flow', '1…0 / Shift+1…0'], ['Nudge (Shift ×10)', 'Arrows']];
   const cmds = COMMANDS.filter((c) => c.keys && !c.id.startsWith('redo2'));
   return (
     <Dialog title="Keyboard Shortcuts" sub="Photoshop-compatible. On macOS, Ctrl is ⌘." wide>
@@ -285,10 +301,10 @@ function ShortcutsDialog() {
 
 function AboutDialog() {
   return (
-    <Dialog title="About Lucent" foot={<button class="btn primary" onClick={() => (dialog.value = null)}>Close</button>}>
+    <Dialog title="About LucentEdit" foot={<button class="btn primary" onClick={() => (dialog.value = null)}>Close</button>}>
       <div class="hero" style={{ marginBottom: 12 }}>
         <img src="/logo.svg" style={{ width: 56, height: 56, borderRadius: 14 }} />
-        <div><h1 style={{ fontSize: 22 }}><span>Lucent</span> 0.1.0</h1><p>Free, open-source image editor and vector design tool with a built-in MCP server.</p></div>
+        <div><h1 style={{ fontSize: 22 }}><span>LucentEdit</span> 0.2.0</h1><p>Free, open-source image editor and vector design tool with a built-in MCP server.</p></div>
       </div>
       <p style={{ color: 'var(--text-2)', lineHeight: 1.6 }}>No accounts, no subscriptions, no telemetry. Your files stay on your computer. Licensed under MIT.</p>
     </Dialog>

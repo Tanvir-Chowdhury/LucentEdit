@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { signal } from '@preact/signals';
-import type { Layer, ShapeLayer, TextLayer, DocState, Effects, BlendMode } from '../core/types';
+import type { Layer, ShapeLayer, TextLayer, DocState, Effects, BlendMode, AdjustLayer } from '../core/types';
+import { filterById } from '../core/filters';
+import { CurvesEditor } from './CurvesEditor';
+import { selectLayerPixels } from '../core/selection';
+import { ui } from './psCommands';
+import { NavigatorPanel, InfoPanel, HistogramPanel, SwatchesPanel } from './infoPanels';
+import { historySource } from '../tools/retouch';
 import { BLEND_MODES } from '../core/types';
 import { tick, cur, commit, touch, select, selectedLayers, jumpTo, maskTarget } from '../core/store';
 import { useTick, usePaint } from '../core/store';
@@ -14,23 +20,28 @@ import { run } from './commands';
 
 const BLEND_LABEL = (b: string) => b.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
+const TOP_TABS: [string, string][] = [['properties', 'Properties'], ['navigator', 'Navigator'], ['info', 'Info'], ['histogram', 'Histogram']];
+const BOTTOM_TABS: [string, string][] = [['layers', 'Layers'], ['history', 'History'], ['swatches', 'Swatches']];
+
 export function Panels() {
-  const [bottom, setBottom] = useState<'layers' | 'history'>('layers');
   useTick();
+  const u = ui.value;
+  const tabs = (list: [string, string][], key: 'topTab' | 'bottomTab') => (
+    <div class="panel-tabs">
+      {list.map(([id, label]) => <button class={`panel-tab${u[key] === id ? ' on' : ''}`} onClick={() => (ui.value = { ...ui.value, [key]: id })}>{label}</button>)}
+    </div>
+  );
   return (
     <div class="panels">
       <div class="panel" style={{ flex: '1 1 46%', minHeight: 180 }}>
-        <div class="panel-head"><span class="panel-title">Properties</span></div>
-        <div class="panel-body" style={{ flex: 1 }}><Properties /></div>
+        <div class="panel-head">{tabs(TOP_TABS, 'topTab')}</div>
+        <div class="panel-body" style={{ flex: 1, padding: u.topTab === 'properties' ? undefined : 0 }}>
+          {u.topTab === 'navigator' ? <NavigatorPanel /> : u.topTab === 'info' ? <InfoPanel /> : u.topTab === 'histogram' ? <HistogramPanel /> : <Properties />}
+        </div>
       </div>
       <div class="panel grow" style={{ flex: '1 1 54%', minHeight: 220 }}>
-        <div class="panel-head">
-          <div class="panel-tabs">
-            <button class={`panel-tab${bottom === 'layers' ? ' on' : ''}`} onClick={() => setBottom('layers')}>Layers</button>
-            <button class={`panel-tab${bottom === 'history' ? ' on' : ''}`} onClick={() => setBottom('history')}>History</button>
-          </div>
-        </div>
-        {bottom === 'layers' ? <LayersPanel /> : <HistoryPanel />}
+        <div class="panel-head">{tabs(BOTTOM_TABS, 'bottomTab')}</div>
+        {u.bottomTab === 'history' ? <HistoryPanel /> : u.bottomTab === 'swatches' ? <SwatchesPanel /> : <LayersPanel />}
       </div>
     </div>
   );
@@ -89,9 +100,50 @@ function Properties() {
           </div>
         </Section>
       )}
-      {l.type !== 'group' && <EffectsProps l={l} />}
+      {l.type === 'adjust' && <AdjustProps l={l} />}
+      {l.type !== 'group' && l.type !== 'adjust' && <EffectsProps l={l} />}
     </>
   );
+}
+
+/** Live controls for an adjustment layer (same parameters as the destructive filter). */
+function AdjustProps({ l }: { l: AdjustLayer }) {
+  const f = filterById(l.filter);
+  if (!f) return <div class="empty">Unknown adjustment "{l.filter}"</div>;
+  const set = (k: string, v: any) => { l.params = { ...l.params, [k]: v }; touch(); };
+  const curves = (f as any).custom === 'curves';
+  return (
+    <Section title={f.name}>
+      {curves && <CurvesEditor params={l.params} onChange={(k, v) => { set(k, v); commitSoon(f.name); }} />}
+      {f.params.map((p: any) => (
+        <div class="row" style={{ marginBottom: 6 }}>
+          <span class="lbl">{p.label}</span>
+          {p.type === 'select' ? (
+            <select class="grow" value={String(l.params[p.key])} onChange={(e) => { set(p.key, (e.target as HTMLSelectElement).value); commit(f.name); }}>
+              {(p.options ?? []).map((o: any) => <option value={String(o.value ?? o)}>{o.label ?? o}</option>)}
+            </select>
+          ) : p.type === 'checkbox' ? (
+            <input type="checkbox" checked={!!l.params[p.key]} onChange={(e) => { set(p.key, (e.target as HTMLInputElement).checked); commit(f.name); }} />
+          ) : p.type === 'color' ? (
+            <Swatch value={String(l.params[p.key])} onChange={(c) => set(p.key, c)} onDone={done(f.name)} />
+          ) : (
+            <>
+              <input type="range" class="grow" min={p.min} max={p.max} step={p.step ?? 1} value={l.params[p.key]} style={{ width: '100%' }} onInput={(e) => set(p.key, +(e.target as HTMLInputElement).value)} onChange={done(f.name)} />
+              <NumField value={l.params[p.key]} min={p.min} max={p.max} step={p.step ?? 1} width={64} onChange={(v) => set(p.key, v)} onCommit={done(f.name)} />
+            </>
+          )}
+        </div>
+      ))}
+      {!f.params.length && !curves && <div style={{ color: 'var(--muted)' }}>No settings. Lower the opacity or paint on a mask to limit it.</div>}
+    </Section>
+  );
+}
+
+/** Commit after edits settle (the Curves editor reports every drag step). */
+let commitTimer = 0;
+function commitSoon(label: string) {
+  clearTimeout(commitTimer);
+  commitTimer = window.setTimeout(() => commit(label), 400);
 }
 
 function DocProps({ ds }: { ds: DocState }) {
@@ -138,7 +190,7 @@ function Transform({ l }: { l: Layer }) {
     live();
   };
   return (
-    <Section title={l.name} right={<span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{l.type === 'raster' ? 'Pixel layer' : l.type === 'shape' ? (l as ShapeLayer).shape === 'path' ? 'Vector path' : 'Shape' : l.type === 'text' ? 'Text' : 'Group'}</span>}>
+    <Section title={l.name} right={<span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{l.type === 'raster' ? 'Pixel layer' : l.type === 'shape' ? (l as ShapeLayer).shape === 'path' ? 'Vector path' : 'Shape' : l.type === 'text' ? 'Text' : l.type === 'adjust' ? 'Adjustment' : 'Group'}</span>}>
       <div class="grid2">
         <NumField label="X" value={l.x} onChange={(v) => { setProps(l, { x: v }); live(); }} onCommit={done('Move')} />
         <NumField label="Y" value={l.y} onChange={(v) => { setProps(l, { y: v }); live(); }} onCommit={done('Move')} />
@@ -363,12 +415,33 @@ function LayerRow({ l, depth, ds, anchor }: { l: Layer; depth: number; ds: DocSt
         {l.type === 'group'
           ? <button class="twisty" onClick={(e) => { e.stopPropagation(); l.expanded = !l.expanded; touch(); }}><Icon name={l.expanded ? 'down' : 'right'} size={13} /></button>
           : <span style={{ width: 16, flex: 'none' }} />}
-        <button class="icon-btn" style={{ width: 22 }} title="Toggle visibility" onClick={(e) => { e.stopPropagation(); l.visible = !l.visible; commit(l.visible ? 'Show Layer' : 'Hide Layer'); }}>
+        <button class="icon-btn" style={{ width: 22 }} title="Toggle visibility" onClick={(e) => {
+          e.stopPropagation();
+          if (e.altKey) {
+            // Alt-click: show only this layer (or show all again), like Photoshop.
+            const others = [...walk(ds.doc.layers)].map(([x]) => x).filter((x) => x !== l && !(x.type === 'group' && [...walk(x.children)].some(([c]) => c === l)));
+            const solo = others.some((x) => x.visible);
+            others.forEach((x) => (x.visible = !solo));
+            l.visible = true;
+            commit(solo ? 'Show Only This Layer' : 'Show All Layers');
+            return;
+          }
+          l.visible = !l.visible; commit(l.visible ? 'Show Layer' : 'Hide Layer');
+        }}>
           <Icon name={l.visible ? 'eye' : 'eyeOff'} size={14} />
         </button>
         {l.clip && <span title="Clipped to the layer below" style={{ color: 'var(--accent)', marginLeft: -4, flex: 'none' }}>↳</span>}
-        <div onClick={() => (maskTarget.value = null)} class={l.mask && maskTarget.value !== l.id ? 'target' : ''} style={{ borderRadius: 6, flex: 'none' }}>
-          {l.type === 'group' ? <div class="thumb icon"><Icon name={l.expanded ? 'folderOpen' : 'folder'} size={16} /></div> : <Thumb l={l} hIndex={ds.hIndex} />}
+        <div onClick={(e) => {
+          if (e.ctrlKey || e.metaKey) {
+            e.stopPropagation();
+            selectLayerPixels(ds, l, e.shiftKey && e.altKey ? 'intersect' : e.shiftKey ? 'add' : e.altKey ? 'subtract' : 'replace');
+            return;
+          }
+          maskTarget.value = null;
+        }} title="Ctrl-click: load layer pixels as selection" class={l.mask && maskTarget.value !== l.id ? 'target' : ''} style={{ borderRadius: 6, flex: 'none' }}>
+          {l.type === 'group' ? <div class="thumb icon"><Icon name={l.expanded ? 'folderOpen' : 'folder'} size={16} /></div>
+            : l.type === 'adjust' ? <div class="thumb icon" title={l.name}><Icon name="sliders" size={16} /></div>
+            : <Thumb l={l} hIndex={ds.hIndex} />}
         </div>
         {l.mask && (
           <div
@@ -439,6 +512,8 @@ function HistoryPanel() {
     <div class="layers">
       {ds.history.map((h, i) => (
         <div class={`history-item${i === ds.hIndex ? ' on' : ''}${i > ds.hIndex ? ' future' : ''}`} onClick={() => jumpTo(i, ds)}>
+          <button class={`icon-btn${historySource.value === i ? ' on' : ''}`} style={{ width: 20, height: 20 }} title="Set the source for the History Brush"
+            onClick={(e) => { e.stopPropagation(); historySource.value = i; }}><Icon name="brush" size={12} /></button>
           <Icon name={i === 0 ? 'file' : 'history'} size={13} /> {h.label}
         </div>
       ))}

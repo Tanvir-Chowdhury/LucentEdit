@@ -15,12 +15,12 @@ const PRESETS = [
 ];
 const recent = signal<string[]>(loadRecent());
 function loadRecent(): string[] {
-  try { return JSON.parse(localStorage.getItem('lucent.recentColors') || '[]'); } catch { return []; }
+  try { return JSON.parse(localStorage.getItem('lucentedit.recentColors') || '[]'); } catch { return []; }
 }
 function pushRecent(c: string) {
   const list = [c, ...recent.value.filter((x) => x !== c)].slice(0, 10);
   recent.value = list;
-  try { localStorage.setItem('lucent.recentColors', JSON.stringify(list)); } catch { /* storage unavailable */ }
+  try { localStorage.setItem('lucentedit.recentColors', JSON.stringify(list)); } catch { /* storage unavailable */ }
 }
 
 export function openPicker(anchor: HTMLElement, value: string, onChange: (c: string) => void, onDone?: () => void) {

@@ -1,4 +1,5 @@
 import { signal } from '@preact/signals';
+import type { ComponentType, JSX } from 'preact';
 
 // Contract between the viewport and the tools. Coordinates: x/y in document pixels,
 // sx/sy in CSS pixels relative to the viewport element.
@@ -31,9 +32,26 @@ export interface Tool {
 /** Set by the viewport so tools can convert coordinates and request text editing. */
 export const view = {
   zoom: 1,
+  width: 0, // viewport size in CSS px
+  height: 0,
   toScreen: (x: number, y: number) => ({ x, y }),
   toDoc: (x: number, y: number) => ({ x, y }),
 };
 
 export const textEditing = signal<string | null>(null);
 export const cropRect = signal<{ x: number; y: number; w: number; h: number } | null>(null);
+
+/**
+ * Registry entry for a tool. `group` puts tools in one toolbar slot with a flyout, like Photoshop
+ * (Shift+key cycles within the group). `icon` is an Icon name or a lucide-preact component.
+ * `options` renders the tool's controls in the options bar.
+ */
+export interface ToolMeta {
+  id: string;
+  label: string;
+  key: string;
+  icon: string | ComponentType<any>;
+  tool: Tool;
+  group: string;
+  options?: () => JSX.Element | null;
+}

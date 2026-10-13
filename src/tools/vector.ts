@@ -4,7 +4,27 @@ import type { PathNode, ShapeLayer, SubPath, TextLayer } from '../core/types';
 import { cur, commit, touch, activeLayer, fg, shapeOpts, select, strokeColor } from '../core/store';
 import { layerMatrix } from '../core/util';
 import { newShape, newPath, newText, addLayer, layerAt, toPathProps } from '../core/ops';
-import { normalizePaths, pathBounds, mapPaths } from '../core/paths';
+import { normalizePaths, pathBounds, mapPaths, parseSvgPath } from '../core/paths';
+
+/** Photoshop-style Custom Shape library (24x24 artwork, scaled to the dragged box). */
+export const CUSTOM_SHAPES = [
+  { id: 'heart', name: 'Heart', d: 'M12 21s-7.5-4.6-9.6-9.2C.8 8.2 3 4 7 4c2.2 0 3.7 1.2 5 3 1.3-1.8 2.8-3 5-3 4 0 6.2 4.2 4.6 7.8C19.5 16.4 12 21 12 21z' },
+  { id: 'arrow-right', name: 'Arrow', d: 'M2 9h12V4l8 8-8 8v-5H2z' },
+  { id: 'arrow-double', name: 'Double Arrow', d: 'M1 12l6-6v4h10V6l6 6-6 6v-4H7v4z' },
+  { id: 'check', name: 'Checkmark', d: 'M2 13l3-3 4 4 10-10 3 3L9 20z' },
+  { id: 'cross', name: 'Cross', d: 'M5 2l7 7 7-7 3 3-7 7 7 7-3 3-7-7-7 7-3-3 7-7-7-7z' },
+  { id: 'plus', name: 'Plus', d: 'M9 2h6v7h7v6h-7v7H9v-7H2V9h7z' },
+  { id: 'bubble', name: 'Speech Bubble', d: 'M4 3h16a3 3 0 013 3v9a3 3 0 01-3 3h-8l-6 4v-4H4a3 3 0 01-3-3V6a3 3 0 013-3z' },
+  { id: 'bolt', name: 'Lightning', d: 'M14 1L3 14h7l-2 9 11-13h-7z' },
+  { id: 'cloud', name: 'Cloud', d: 'M7 20a5 5 0 01-.9-9.9A7 7 0 0119.6 9 5.5 5.5 0 0118.5 20z' },
+  { id: 'drop', name: 'Drop', d: 'M12 1s-7 8.5-7 13.5a7 7 0 0014 0C19 9.5 12 1 12 1z' },
+  { id: 'moon', name: 'Moon', d: 'M15 2a10 10 0 100 20A9 9 0 0115 2z' },
+  { id: 'burst', name: 'Burst', d: 'M12 0l2.5 5.5L20 3l-1.5 6L24 12l-5.5 3 1.5 6-5.5-2.5L12 24l-2.5-5.5L4 21l1.5-6L0 12l5.5-3L4 3l5.5 2.5z' },
+  { id: 'badge', name: 'Badge', d: 'M12 1l3 2.5 4-.5.5 4L22 10l-2 3.5L21 17l-3.8 1.5L15.5 22 12 20.5 8.5 22l-1.7-3.5L3 17l1-3.5L2 10l2.5-3 .5-4 4 .5z' },
+  { id: 'shield', name: 'Shield', d: 'M12 1l9 4v6c0 6-4 10.5-9 12C7 21.5 3 17 3 11V5z' },
+  { id: 'tag', name: 'Tag', d: 'M2 2h10l11 11-10 10L2 12zM7 5a2 2 0 100 4 2 2 0 000-4z' },
+  { id: 'ribbon', name: 'Ribbon', d: 'M0 6h24l-3 6 3 6H0l3-6z' },
+] as const;
 import { ACCENT, drawPill } from './move';
 
 // Shape tools, Pen, Direct Selection and Type.
@@ -46,12 +66,20 @@ export const shapeTool: Tool = {
         fill: null, stroke: { paint: o.stroke ? strokeColor.value : fg.value, width: Math.max(1, o.strokeWidth), cap: 'round', join: 'round' }, name: 'Line',
       });
       addLayer(l, ds);
+    } else if (o.shape === 'custom') {
+      const b = box && box.w >= 2 && box.h >= 2 ? box : { x: start.x - 50, y: start.y - 50, w: 100, h: 100 };
+      const preset = CUSTOM_SHAPES.find((c) => c.id === o.custom) ?? CUSTOM_SHAPES[0];
+      const l = newPath(parseSvgPath(preset.d), { fill: o.fill ? fg.value : null, stroke, name: preset.name });
+      Object.assign(l, b);
+      if (!l.fill && !l.stroke) l.stroke = { paint: fg.value, width: 2 };
+      addLayer(l, ds);
     } else {
       const b = box && box.w >= 2 && box.h >= 2 ? box : { x: start.x - 50, y: start.y - 50, w: 100, h: 100 };
+      const tri = o.shape === 'triangle';
       const l = newShape({
-        shape: o.shape, ...b, fill: o.fill ? fg.value : null, stroke,
+        shape: (tri ? 'polygon' : o.shape) as ShapeLayer['shape'], ...b, ...(tri ? { name: 'Triangle', sides: 3 } : {}), fill: o.fill ? fg.value : null, stroke,
         radius: o.shape === 'rect' ? o.radius : undefined,
-        sides: o.shape === 'polygon' ? o.sides : o.shape === 'star' ? o.points : undefined,
+        sides: o.shape === 'polygon' ? o.sides : o.shape === 'star' ? o.points : tri ? 3 : undefined,
         inner: o.shape === 'star' ? o.inner : undefined,
       });
       if (!l.fill && !l.stroke) l.stroke = { paint: fg.value, width: 2 };
@@ -74,8 +102,8 @@ export const shapeTool: Tool = {
     ctx.beginPath();
     const kind = shapeOpts.value.shape;
     if (kind === 'ellipse') ctx.ellipse((a.x + b.x) / 2, (a.y + b.y) / 2, (b.x - a.x) / 2, (b.y - a.y) / 2, 0, 0, Math.PI * 2);
-    else if (kind === 'polygon' || kind === 'star') {
-      const n = kind === 'star' ? shapeOpts.value.points * 2 : shapeOpts.value.sides;
+    else if (kind === 'polygon' || kind === 'star' || kind === 'triangle') {
+      const n = kind === 'star' ? shapeOpts.value.points * 2 : kind === 'triangle' ? 3 : shapeOpts.value.sides;
       for (let i = 0; i < n; i++) {
         const ang = -Math.PI / 2 + (i * 2 * Math.PI) / n, r = kind === 'star' && i % 2 ? shapeOpts.value.inner : 1;
         const x = (a.x + b.x) / 2 + (Math.cos(ang) * r * (b.x - a.x)) / 2, y = (a.y + b.y) / 2 + (Math.sin(ang) * r * (b.y - a.y)) / 2;
@@ -165,7 +193,7 @@ export const penTool: Tool = {
   },
 };
 
-function drawNodes(o: OverlayCtx, nodes: PathNode[], active: number, map: (x: number, y: number) => { x: number; y: number }) {
+export function drawNodes(o: OverlayCtx, nodes: PathNode[], active: number, map: (x: number, y: number) => { x: number; y: number }) {
   const { ctx } = o;
   nodes.forEach((n, i) => {
     const p = o.toScreen(map(n.x, n.y).x, map(n.x, n.y).y);
@@ -191,13 +219,13 @@ let selNode: { sp: SubPath; n: PathNode; part: 'anchor' | 'in' | 'out' } | null 
 let dragging = false;
 let dsStart: PEvent | null = null;
 
-function editTarget(): ShapeLayer | null {
+export function editTarget(): ShapeLayer | null {
   const l = activeLayer();
   return l && l.type === 'shape' && !l.locked ? l : null;
 }
 
 /** Natural path coords <-> document coords for a path layer. */
-function mapper(l: ShapeLayer) {
+export function mapper(l: ShapeLayer) {
   const m = layerMatrix(l), inv = m.inverse();
   const sx = l.w / (l.nw ?? l.w), sy = l.h / (l.nh ?? l.h);
   return {
@@ -207,7 +235,7 @@ function mapper(l: ShapeLayer) {
 }
 
 /** Refit the layer box to its edited path, keeping the drawing where it is. */
-function renormalize(l: ShapeLayer) {
+export function renormalize(l: ShapeLayer) {
   const sx = l.w / (l.nw ?? l.w), sy = l.h / (l.nh ?? l.h);
   const local = mapPaths(l.paths ?? [], (x, y) => [x * sx, y * sy]);
   const b = pathBounds(local);
@@ -220,7 +248,7 @@ function renormalize(l: ShapeLayer) {
   l.x = c.x - l.w / 2; l.y = c.y - l.h / 2;
 }
 
-function hitNode(l: ShapeLayer, e: PEvent) {
+export function hitNode(l: ShapeLayer, e: PEvent) {
   const mp = mapper(l);
   const near = (x: number, y: number) => {
     const d = mp.toDoc(x, y), s = view.toScreen(d.x, d.y);

@@ -3,7 +3,7 @@ import type { RasterLayer, DocState, Layer } from '../core/types';
 import { cur, commit, touch, activeLayer, brush, fg, bg, bucket, gradientOpts, toast, maskTarget } from '../core/store';
 import { makeCanvas, ctx2d, cloneCanvas, parseColor } from '../core/util';
 import { newRaster, addLayer, editablePixels } from '../core/ops';
-import { pixelMatrix, compositeMasked, floodRegion, sampleColor } from '../core/selection';
+import { pixelMatrix, compositeMasked, floodRegion, sampleColor, quickMaskStandIn } from '../core/selection';
 import { flatten } from '../core/render';
 import { ACCENT } from './move';
 
@@ -77,6 +77,8 @@ function recomposite() {
 
 /** When editing a layer mask, paint into the mask through a stand-in raster layer. */
 function maskStandIn(ds: DocState): RasterLayer | null {
+  const qm = quickMaskStandIn(ds);
+  if (qm) return qm;
   const l = activeLayer(ds);
   if (!l || !l.mask || maskTarget.value !== l.id) return null;
   const canvas = cloneCanvas(l.mask.canvas);

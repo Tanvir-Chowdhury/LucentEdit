@@ -1,13 +1,13 @@
 [package]
-name = "lucent"
-version = "0.1.0"
-description = "Lucent: lightweight open-source image and vector editor"
+name = "lucentedit"
+version = "0.2.0"
+description = "LucentEdit: lightweight open-source image and vector editor"
 license = "MIT"
 edition = "2021"
 rust-version = "1.80"
 
 [lib]
-name = "lucent_lib"
+name = "lucentedit_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

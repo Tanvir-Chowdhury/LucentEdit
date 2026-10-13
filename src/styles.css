@@ -280,3 +280,12 @@ kbd { padding: 1px 6px; border-radius: 5px; background: var(--bg-3); border: 1px
 .layer .target > .thumb, .layer .thumb.target { box-shadow: 0 0 0 2px var(--accent); }
 .layer .mask-thumb { background: #000; cursor: pointer; }
 .layer .mask-thumb.off { opacity: 0.4; background: repeating-linear-gradient(45deg, #000 0 4px, #400 4px 8px); }
+.tool-btn .tool-more { position: absolute; right: 3px; bottom: 3px; width: 0; height: 0; border-left: 4px solid transparent; border-bottom: 4px solid currentColor; opacity: 0.55; }
+.flyout { z-index: 260; }
+/* Tab hides panels; F cycles: 1 = full screen with menu bar, 2 = canvas only. */
+.app.no-panels, .app.screen-1 { grid-template-columns: 0 1fr 0; }
+.app.no-panels .toolbar, .app.no-panels .panels, .app.no-panels .optionsbar,
+.app.screen-1 .panels, .app.screen-1 .toolbar { display: none; }
+.app.no-panels { grid-template-rows: 36px 0 1fr 26px; }
+.app.screen-2 { grid-template-rows: 0 0 1fr 0; grid-template-columns: 0 1fr 0; }
+.app.screen-2 > .menubar, .app.screen-2 > .optionsbar, .app.screen-2 > .toolbar, .app.screen-2 > .panels, .app.screen-2 > .statusbar, .app.screen-2 .tabs { display: none; }

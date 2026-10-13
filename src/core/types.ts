@@ -98,7 +98,14 @@ export interface GroupLayer extends Base {
   expanded: boolean;
 }
 
-export type Layer = RasterLayer | ShapeLayer | TextLayer | GroupLayer;
+/** Non-destructive adjustment: runs a point filter (FilterDef.point) on everything below it. */
+export interface AdjustLayer extends Base {
+  type: 'adjust';
+  filter: string;
+  params: Record<string, any>;
+}
+
+export type Layer = RasterLayer | ShapeLayer | TextLayer | GroupLayer | AdjustLayer;
 
 export interface Doc {
   id: string;
@@ -108,9 +115,12 @@ export interface Doc {
   background: string | null; // null = transparent
   layers: Layer[]; // bottom -> top
   path?: string; // where it was saved (desktop)
+  /** Ruler guides in document pixels. */
+  guides?: { v: number[]; h: number[] };
 }
 
-export interface View { zoom: number; panX: number; panY: number }
+/** rotation: Rotate View tool angle in degrees, around the viewport center (view only). */
+export interface View { zoom: number; panX: number; panY: number; rotation?: number }
 
 export interface Snapshot {
   label: string;
@@ -129,6 +139,10 @@ export interface DocState {
   selected: string[]; // layer ids
   /** Pixel selection: doc-sized canvas, alpha = selected. */
   mask: HTMLCanvasElement | null;
+  /** Saved selections (Select > Save Selection), doc-sized alpha masks. */
+  channels?: { name: string; mask: HTMLCanvasElement }[];
+  /** Quick Mask being painted (doc-sized, alpha = selected); ds.mask is null while it exists. */
+  qmask?: HTMLCanvasElement;
   view: View;
   dirty: boolean;
 }

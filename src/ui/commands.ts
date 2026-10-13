@@ -67,16 +67,16 @@ export async function placeFiles(files?: OpenedFile[]) {
 export async function saveDoc(as = false) {
   const ds = cur();
   if (!ds) return;
-  const bytes = await exportBytes(ds.doc, 'lucent');
-  const name = `${ds.doc.name}.lucent`;
-  const path = await saveAs(bytes, name, 'lucent', as ? undefined : ds.doc.path);
+  const bytes = await exportBytes(ds.doc, 'lucentedit');
+  const name = `${ds.doc.name}.lucentedit`;
+  const path = await saveAs(bytes, name, 'lucentedit', as ? undefined : ds.doc.path);
   if (path === null) return;
   if (path) {
     ds.doc.path = path;
-    ds.doc.name = path.split(/[\\/]/).pop()!.replace(/\.lucent$/i, '');
+    ds.doc.name = path.split(/[\\/]/).pop()!.replace(/\.lucentedit$/i, '');
   }
   ds.dirty = false;
-  toast(isTauri ? `Saved ${ds.doc.name}.lucent` : 'Downloaded .lucent file', 'success');
+  toast(isTauri ? `Saved ${ds.doc.name}.lucentedit` : 'Downloaded .lucentedit file', 'success');
   touch();
 }
 
@@ -141,6 +141,9 @@ export function paste() {
   commit('Paste');
   return true;
 }
+
+/** Replace the internal clipboard (used by Copy Merged). */
+export function setClipboard(layers: Layer[]) { clip = layers; }
 
 export function nudge(dx: number, dy: number) {
   const ds = cur();
@@ -239,15 +242,22 @@ const hasDoc = () => !!cur();
 const hasSel = () => !!cur()?.selected.length;
 const hasMask = () => !!cur()?.mask;
 
+/** Photoshop default shortcuts for Image > Adjustments and Filter entries. */
+const FILTER_KEYS: Record<string, string> = {
+  invert: 'Mod+I', levels: 'Mod+L', curves: 'Mod+M', 'color-balance': 'Mod+B', 'hue-saturation': 'Mod+U',
+  desaturate: 'Mod+Shift+U', grayscale: 'Mod+Alt+Shift+B', 'auto-tone': 'Mod+Shift+L', 'auto-contrast': 'Mod+Alt+Shift+L',
+  'auto-color': 'Mod+Shift+B',
+};
+
 export const COMMANDS: Command[] = [
   // File
   { id: 'new', label: 'New…', keys: 'Mod+N', run: () => (dialog.value = { kind: 'new' }) },
   { id: 'open', label: 'Open…', keys: 'Mod+O', run: () => openFiles() },
-  { id: 'place', label: 'Place / Import…', keys: 'Mod+Shift+P', run: () => placeFiles(), enabled: hasDoc },
+  { id: 'place', label: 'Place Embedded…', run: () => placeFiles(), enabled: hasDoc },
   { id: 'save', label: 'Save', keys: 'Mod+S', run: () => saveDoc(), enabled: hasDoc },
   { id: 'saveAs', label: 'Save As…', keys: 'Mod+Shift+S', run: () => saveDoc(true), enabled: hasDoc },
-  { id: 'export', label: 'Export As…', keys: 'Mod+Shift+E', run: () => (dialog.value = { kind: 'export' }), enabled: hasDoc },
-  { id: 'exportPng', label: 'Quick Export as PNG', keys: 'Mod+Shift+Alt+W', run: () => quickExport('png'), enabled: hasDoc },
+  { id: 'export', label: 'Export As…', keys: 'Mod+Alt+Shift+W', run: () => (dialog.value = { kind: 'export' }), enabled: hasDoc },
+  { id: 'exportPng', label: 'Quick Export as PNG', run: () => quickExport('png'), enabled: hasDoc },
   { id: 'exportSvg', label: 'Quick Export as SVG', run: () => quickExport('svg'), enabled: hasDoc },
   { id: 'close', label: 'Close', keys: 'Mod+W', run: () => closeDoc(activeIndex.value), enabled: hasDoc },
   // Edit
@@ -277,7 +287,7 @@ export const COMMANDS: Command[] = [
   { id: 'trim', label: 'Trim Transparent Pixels', run: trim, enabled: hasDoc },
   // Layer
   { id: 'newLayer', label: 'New Layer', keys: 'Mod+Shift+N', run: newLayer, enabled: hasDoc },
-  { id: 'dupLayer', label: 'Duplicate Layer', keys: 'Mod+J', run: () => duplicateSelected(), enabled: hasSel },
+  { id: 'dupLayer', label: 'Duplicate Layer', run: () => duplicateSelected(), enabled: hasSel },
   { id: 'delLayer', label: 'Delete Layer', run: deleteSelected, enabled: hasSel },
   { id: 'group', label: 'Group Layers', keys: 'Mod+G', run: () => groupSelected(), enabled: hasSel },
   { id: 'ungroup', label: 'Ungroup Layers', keys: 'Mod+Shift+G', run: () => ungroup(), enabled: hasSel },
@@ -320,15 +330,15 @@ export const COMMANDS: Command[] = [
   { id: 'gridToggle', label: 'Show Grid', keys: "Mod+'", run: () => { viewOpts.value = { ...viewOpts.value, grid: !viewOpts.value.grid }; touch(); } },
   { id: 'rulers', label: 'Show Rulers', keys: 'Mod+R', run: () => { viewOpts.value = { ...viewOpts.value, rulers: !viewOpts.value.rulers }; touch(); } },
   // Help & misc
-  { id: 'palette', label: 'Command Palette', keys: 'Mod+K', run: () => (dialog.value = { kind: 'palette' }) },
-  { id: 'shortcuts', label: 'Keyboard Shortcuts', keys: 'Mod+/', run: () => (dialog.value = { kind: 'shortcuts' }) },
+  { id: 'palette', label: 'Search…', keys: 'Mod+F', run: () => (dialog.value = { kind: 'palette' }) },
+  { id: 'shortcuts', label: 'Keyboard Shortcuts…', keys: 'Mod+Alt+Shift+K', run: () => (dialog.value = { kind: 'shortcuts' }) },
   { id: 'mcp', label: 'Connect AI Agents (MCP)…', run: () => (dialog.value = { kind: 'mcp' }) },
-  { id: 'about', label: 'About Lucent', run: () => (dialog.value = { kind: 'about' }) },
+  { id: 'about', label: 'About LucentEdit', run: () => (dialog.value = { kind: 'about' }) },
   { id: 'defaultColors', label: 'Default Colors', keys: 'D', run: () => { fg.value = '#000000'; bg.value = '#ffffff'; } },
   { id: 'swapColors', label: 'Swap Colors', keys: 'X', run: () => { const f = fg.value; fg.value = bg.value; bg.value = f; } },
   ...FILTERS.map((f) => ({
     id: `filter:${f.id}`, label: `${f.menu === 'adjust' ? 'Adjust' : 'Filter'}: ${f.name}${f.params.length ? '…' : ''}`,
-    keys: f.id === 'invert' ? 'Mod+I' : f.id === 'levels' ? 'Mod+L' : f.id === 'hue-saturation' ? 'Mod+U' : f.id === 'grayscale' ? 'Mod+Shift+U' : undefined,
+    keys: FILTER_KEYS[f.id],
     run: () => openFilter(f.id), enabled: hasSel,
   })),
 ];
@@ -347,13 +357,19 @@ function alignCmd(mode: Parameters<typeof align>[1]) {
   commit('Align');
 }
 
+/** Last filter applied with its settings, for Filter > Last Filter (Ctrl+Alt+F). */
+export const lastFilter: { id: string; params: Record<string, any> } = { id: '', params: {} };
+
 export function openFilter(id: string) {
   const f = filterById(id);
   const l = activeLayer();
   if (!f || !l) return toast('Select a layer first', 'error');
   if (l.locked) return toast('Layer is locked', 'error');
   if (!f.params.length) {
-    import('../core/filters').then(({ applyFilter }) => { const ds = cur(); if (ds && applyFilter(ds, l, f, {})) commit(f.name); });
+    import('../core/filters').then(({ applyFilter }) => {
+      const ds = cur();
+      if (ds && applyFilter(ds, l, f, {})) { Object.assign(lastFilter, { id: f.id, params: {} }); commit(f.name); }
+    });
     return;
   }
   dialog.value = { kind: 'filter', data: { id: f.id } };
@@ -384,6 +400,8 @@ export function matchShortcut(e: KeyboardEvent): Command | null {
   if (e.code === 'Slash') key = '/';
   if (e.code === 'Digit0') key = '0';
   if (e.code === 'Digit1') key = '1';
+  if (e.code === 'Period') key = '.';
+  if (e.code === 'Comma') key = ',';
   if (/^Key[A-Z]$/.test(e.code)) key = e.code.slice(3);
   for (const c of COMMANDS) {
     if (!c.keys) continue;
@@ -392,7 +410,7 @@ export function matchShortcut(e: KeyboardEvent): Command | null {
     const want = { mod: parts.includes('Mod'), shift: parts.includes('Shift'), alt: parts.includes('Alt') };
     const keyOk = k === key.toUpperCase() || (k === 'DELETE' && (key === 'Delete' || key === 'Backspace') && !want.mod && !want.alt);
     // Ctrl + "+" is Shift+= on most layouts, so Shift doesn't matter for zoom in.
-    const shiftOk = want.shift === e.shiftKey || k === '=';
+    const shiftOk = want.shift === e.shiftKey || (k === '=' && want.mod);
     if (keyOk && want.mod === mod && shiftOk && want.alt === e.altKey) return c;
   }
   return null;

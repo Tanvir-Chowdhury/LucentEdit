@@ -5,10 +5,12 @@ import {
   activeLayer, commit, touch, cursorPos, mcpStatus, docs, activeIndex, closeDoc, dialog, selectedLayers,
 } from '../core/store';
 import { useTick, usePaint } from '../core/store';
-import { TOOLS, setTool, toolById } from '../tools';
+import { TOOLS, setTool, toolById, groupTools, groupCurrent, GROUP_ORDER } from '../tools';
+import { CUSTOM_SHAPES } from '../tools/vector';
 import { applyCrop, cancelCrop } from '../tools/select';
 import { cropRect } from '../tools/types';
-import { maskBounds } from '../core/selection';
+import { maskBounds, quickMask } from '../core/selection';
+const quickMaskOn = () => quickMask.value;
 import { setProps } from '../core/ops';
 import type { TextLayer } from '../core/types';
 import { Icon } from './icons';
@@ -16,6 +18,7 @@ import { askConfirm, askText } from './dialogs';
 import { Swatch, NumField, Seg, Slider } from './controls';
 import { COMMANDS, run, prettyKeys, cmd, fitView, actualPixels } from './commands';
 import { FILTERS } from '../core/filters';
+import { selectMenu } from './selectDialogs';
 import { zoomAt } from '../tools';
 import { viewportSize } from './commands';
 
@@ -32,38 +35,69 @@ const showTip = (e: MouseEvent, text: string, keys?: string) => {
 };
 const hideTip = () => (tip.value = null);
 
-const GROUPS: string[][] = [['move'], ['marquee', 'lasso', 'wand', 'crop', 'eyedropper'], ['brush', 'eraser', 'bucket', 'gradient'], ['text', 'pen', 'direct', 'shape'], ['hand', 'zoom']];
+const flyout = signal<{ group: string; x: number; y: number } | null>(null);
 
 export function Toolbar() {
   useTick();
+  const slots: (string | '-')[] = GROUP_ORDER.filter((g, i, arr) => g === '-' ? arr[i - 1] !== '-' : groupTools(g).length > 0);
+  let press = 0;
+  const openFly = (e: MouseEvent, group: string) => {
+    const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    hideTip();
+    flyout.value = { group, x: r.right + 6, y: r.top };
+  };
   return (
     <div class="toolbar">
-      {GROUPS.map((g, gi) => (
-        <>
-          {gi > 0 && <div class="tool-sep" />}
-          {g.map((id) => {
-            const t = toolById(id as any);
-            const icon = id === 'shape' ? shapeOpts.value.shape : id === 'marquee' && marquee.value.shape === 'ellipse' ? 'circleDashed' : t.icon;
-            return (
-              <button
-                key={id}
-                class={`tool-btn${tool.value === id ? ' on' : ''}`}
-                onClick={() => setTool(t.id)}
-                onMouseEnter={(e) => showTip(e, t.label, t.key)}
-                onMouseLeave={hideTip}
-              >
-                <Icon name={icon} size={18} />
-              </button>
-            );
-          })}
-        </>
-      ))}
+      {slots.map((g) => {
+        if (g === '-') return <div class="tool-sep" />;
+        const tools = groupTools(g);
+        const t = tools.find((x) => x.id === tool.value) ?? toolById(groupCurrent.value[g] ?? tools[0].id);
+        const on = tools.some((x) => x.id === tool.value);
+        return (
+          <button
+            key={g}
+            class={`tool-btn${on ? ' on' : ''}`}
+            onClick={() => setTool(t.id)}
+            onContextMenu={(e) => { e.preventDefault(); if (tools.length > 1) openFly(e, g); }}
+            onPointerDown={(e) => { const el = e.currentTarget; clearTimeout(press); if (tools.length > 1) press = window.setTimeout(() => openFly({ currentTarget: el } as any, g), 380); }}
+            onPointerUp={() => clearTimeout(press)}
+            onPointerLeave={() => clearTimeout(press)}
+            onMouseEnter={(e) => showTip(e, t.label + (tools.length > 1 ? ' (right-click for more)' : ''), t.key)}
+            onMouseLeave={hideTip}
+          >
+            <Icon name={t.icon} size={18} />
+            {tools.length > 1 && <span class="tool-more" />}
+          </button>
+        );
+      })}
       <div class="colors">
         <button class="bg" style={{ background: bg.value }} title="Background color" onClick={(e) => openColor(e, 'bg')} />
         <button class="fg" style={{ background: fg.value }} title="Foreground color" onClick={(e) => openColor(e, 'fg')} />
         <button class="mini swap" title="Swap colors (X)" onClick={() => run('swapColors')}><Icon name="swap" size={11} /></button>
         <button class="mini reset" title="Default colors (D)" onClick={() => run('defaultColors')}><Icon name="reset" size={11} /></button>
       </div>
+      <button class={`tool-btn${quickMaskOn() ? ' on' : ''}`} title="Edit in Quick Mask Mode (Q)" onClick={() => run('quickMask')} style={{ marginTop: 6 }}><Icon name="circleDashed" size={16} /></button>
+      <button class="tool-btn" title="Change Screen Mode (F)" onClick={() => run('screenMode')}><Icon name="monitor" size={16} /></button>
+    </div>
+  );
+}
+
+export function ToolFlyout() {
+  const f = flyout.value;
+  useEffect(() => {
+    if (!f) return;
+    const close = (e: PointerEvent) => { if (!(e.target as HTMLElement).closest('.flyout')) flyout.value = null; };
+    const t = setTimeout(() => window.addEventListener('pointerdown', close));
+    return () => { clearTimeout(t); window.removeEventListener('pointerdown', close); };
+  }, [f]);
+  if (!f) return null;
+  return (
+    <div class="menu-pop flyout" style={{ position: 'fixed', left: f.x, top: f.y, minWidth: 220 }}>
+      {groupTools(f.group).map((t) => (
+        <button class={`menu-item${tool.value === t.id ? ' hl' : ''}`} onClick={() => { setTool(t.id); flyout.value = null; }}>
+          <Icon name={t.icon} size={15} /> {t.label}<span class="kbd">{t.key}</span>
+        </button>
+      ))}
     </div>
   );
 }
@@ -99,13 +133,16 @@ const commitText = () => { if (selectedLayers().some((l) => l.type === 'text')) 
 export function OptionsBar() {
   useTick();
   const t = toolById(tool.value);
+  const meta = t;
   const b = brush.value;
   const so = shapeOpts.value;
   const to = textOpts.value;
   const active = activeLayer();
   const textL = active?.type === 'text' ? active : null;
   const body = (() => {
-    switch (tool.value) {
+    if (meta.options) return meta.options();
+    const key = tool.value.startsWith('shape') ? 'shape' : tool.value === 'marqueeEllipse' ? 'marquee' : tool.value;
+    switch (key) {
       case 'move':
         return (
           <>
@@ -207,10 +244,11 @@ export function OptionsBar() {
       case 'shape':
         return (
           <>
-            <Seg value={so.shape} onChange={(v) => (shapeOpts.value = { ...so, shape: v })} options={[
-              { v: 'rect', icon: 'rect', title: 'Rectangle' }, { v: 'ellipse', icon: 'ellipse', title: 'Ellipse' }, { v: 'polygon', icon: 'polygon', title: 'Polygon' },
-              { v: 'star', icon: 'star', title: 'Star' }, { v: 'line', icon: 'line', title: 'Line' },
-            ]} />
+            {so.shape === 'custom' && (
+              <select value={so.custom} title="Custom shape" onChange={(e) => (shapeOpts.value = { ...so, custom: (e.target as HTMLSelectElement).value })}>
+                {CUSTOM_SHAPES.map((c) => <option value={c.id}>{c.name}</option>)}
+              </select>
+            )}
             <div class="opt-sep" />
             <label class="opt"><input type="checkbox" checked={so.fill} onChange={(e) => (shapeOpts.value = { ...so, fill: (e.target as HTMLInputElement).checked })} /> Fill</label>
             <Swatch value={fg.value} title="Fill color" onChange={(c) => (fg.value = c)} />
@@ -237,7 +275,7 @@ export function OptionsBar() {
   })();
   return (
     <div class="optionsbar">
-      <div class="tool-name"><Icon name={tool.value === 'shape' ? so.shape : t.icon} size={16} /> {t.label}</div>
+      <div class="tool-name"><Icon name={t.icon} size={16} /> {t.label}</div>
       {body}
     </div>
   );
@@ -275,25 +313,54 @@ export function FontSelect({ value, onChange }: { value: string; onChange: (v: s
 // Menu bar
 
 type MenuEntry = string | '-' | { label: string; items: MenuEntry[] };
-const MENUS: { label: string; items: MenuEntry[] }[] = [
-  { label: 'File', items: ['new', 'open', 'place', '-', 'save', 'saveAs', '-', 'export', 'exportPng', 'exportSvg', '-', 'close'] },
-  { label: 'Edit', items: ['undo', 'redo', '-', 'cut', 'copy', 'paste', 'delete', '-', 'fill', 'fillBg', '-', 'transform', 'flipH', 'flipV', 'rot90', 'rot-90', '-', 'palette'] },
-  {
-    label: 'Image', items: [
-      { label: 'Adjustments', items: FILTERS.filter((f) => f.menu === 'adjust').map((f) => `filter:${f.id}`) },
-      '-', 'imageSize', 'canvasSize', '-', 'rotCW', 'rotCCW', 'rot180', 'flipCanvasH', 'flipCanvasV', '-', 'cropSel', 'trim',
-    ],
-  },
-  {
-    label: 'Layer', items: ['newLayer', 'dupLayer', 'delLayer', '-', 'group', 'ungroup', '-', { label: 'Arrange', items: ['front', 'forward', 'backward', 'back'] },
-      { label: 'Align', items: ['alignL', 'alignHC', 'alignR', 'alignT', 'alignVC', 'alignB', '-', 'distH', 'distV'] },
-      { label: 'Layer Mask', items: ['maskReveal', 'maskHide', 'maskSel', 'maskHideSel', '-', 'maskToggle', 'maskApply', 'maskDelete'] }, 'clip', '-', 'mergeDown', 'flatten', 'rasterize'],
-  },
-  { label: 'Select', items: ['selectAll', 'deselect', 'inverse', 'feather', '-', 'allLayers', 'deselectLayers'] },
-  { label: 'Filter', items: FILTERS.filter((f) => f.menu === 'filter').map((f) => `filter:${f.id}`) },
-  { label: 'View', items: ['zoomIn', 'zoomOut', 'fit', 'actual', '-', 'rulers', 'gridToggle', 'snap'] },
-  { label: 'Help', items: ['shortcuts', 'mcp', '-', 'about'] },
-];
+/** Filter menu grouped like Photoshop (submenus come from FilterDef.submenu when present). */
+function filterMenu(): MenuEntry[] {
+  const filters = FILTERS.filter((f) => f.menu === 'filter');
+  const order = ['Blur', 'Distort', 'Noise', 'Pixelate', 'Render', 'Sharpen', 'Stylize', 'Other'];
+  const groups = new Map<string, string[]>();
+  for (const f of filters) {
+    const g = (f as any).submenu ?? 'Other';
+    groups.set(g, [...(groups.get(g) ?? []), `filter:${f.id}`]);
+  }
+  const names = [...groups.keys()].sort((x, y) => (order.indexOf(x) + 99) % 99 - (order.indexOf(y) + 99) % 99);
+  return ['lastFilter', '-', ...names.map((n) => ({ label: n, items: groups.get(n)! }))];
+}
+
+function menus(): { label: string; items: MenuEntry[] }[] {
+  const adjust = FILTERS.filter((f) => f.menu === 'adjust');
+  const auto = adjust.filter((f) => f.id.startsWith('auto-')).map((f) => `filter:${f.id}`);
+  return [
+    { label: 'File', items: ['new', 'open', '-', 'close', 'closeAll', '-', 'save', 'saveAs', 'saveCopy', 'revert', '-',
+      { label: 'Export', items: ['exportPng', 'exportJpg', 'exportSvg', '-', 'export', 'saveForWeb'] }, '-', 'place'] },
+    { label: 'Edit', items: ['undo', 'redo', 'stepForward', 'stepBackward', '-', 'cut', 'copy', 'copyMerged', 'paste', 'pasteInPlace', 'delete', '-', 'palette', '-',
+      'fillDialog', 'strokeDialog', 'fill', 'fillBg', '-', 'transform',
+      { label: 'Transform', items: ['rot180', 'rot90', 'rot-90', '-', 'flipH', 'flipV'] }, '-', 'purgeHistory', '-', 'shortcuts', 'preferences'] },
+    { label: 'Image', items: [
+      { label: 'Mode', items: ['modeGray'] },
+      { label: 'Adjustments', items: adjust.filter((f) => !f.id.startsWith('auto-')).map((f) => `filter:${f.id}`) },
+      '-', ...auto, ...(auto.length ? ['-'] : []), 'imageSize', 'canvasSize',
+      { label: 'Image Rotation', items: ['rot180', 'rotCW', 'rotCCW', '-', 'flipCanvasH', 'flipCanvasV'] },
+      'cropSel', 'trim', 'revealAll', '-', 'duplicateDoc'] },
+    { label: 'Layer', items: [
+      { label: 'New', items: ['newLayer', 'layerViaCopy', 'layerViaCut', '-', 'group'] },
+      'dupLayer', 'delLayer', '-',
+      { label: 'Layer Style', items: ['layerStyle', 'clearStyle'] },
+      { label: 'New Fill Layer', items: ['fillSolid', 'fillGradient'] },
+      { label: 'New Adjustment Layer', items: adjust.filter((f) => (f as any).point).map((f) => `adj:${f.id}`) },
+      { label: 'Layer Mask', items: ['maskReveal', 'maskHide', 'maskSel', 'maskHideSel', '-', 'maskToggle', 'maskApply', 'maskDelete'] },
+      'clip', '-', 'rasterize', '-', 'group', 'ungroup', 'hideLayers', '-',
+      { label: 'Arrange', items: ['front', 'forward', 'backward', 'back'] },
+      { label: 'Align', items: ['alignL', 'alignHC', 'alignR', 'alignT', 'alignVC', 'alignB'] },
+      { label: 'Distribute', items: ['distH', 'distV'] }, '-', 'lockLayers', '-',
+      'mergeDown', 'mergeVisible', 'stampVisible', 'flatten'] },
+    { label: 'Select', items: selectMenu() },
+    { label: 'Filter', items: filterMenu() },
+    { label: 'View', items: ['zoomIn', 'zoomOut', 'fit', 'actual', 'zoom200', '-', 'screenMode', '-', 'extras',
+      { label: 'Show', items: ['showGuides', 'gridToggle'] }, '-', 'rulers', '-', 'snap', '-', 'lockGuides', 'clearGuides', 'newGuide', 'guidesFromShape'] },
+    { label: 'Window', items: ['winHistogram', 'winHistory', 'winInfo', 'winLayers', 'winNavigator', 'winProperties', 'winSwatches', '-', 'togglePanels'] },
+    { label: 'Help', items: ['shortcuts', 'mcp', '-', 'about'] },
+  ];
+}
 
 const openMenu = signal<number | null>(null);
 
@@ -313,7 +380,8 @@ function MenuItems({ items }: { items: MenuEntry[] }) {
         }
         const c = cmd(it);
         if (!c) return null;
-        const checked = (it === 'rulers' && viewOpts.value.rulers) || (it === 'gridToggle' && viewOpts.value.grid) || (it === 'snap' && viewOpts.value.snap);
+        const v = viewOpts.value;
+        const checked = (it === 'rulers' && v.rulers) || (it === 'gridToggle' && v.grid) || (it === 'snap' && v.snap) || (it === 'extras' && v.extras) || (it === 'showGuides' && v.guides) || (it === 'lockGuides' && v.lockGuides);
         const label = c.label.replace(/^(Adjust|Filter): /, '');
         return (
           <button class="menu-item" disabled={c.enabled ? !c.enabled() : false} onMouseEnter={() => setSub(null)} onClick={() => { openMenu.value = null; c.run(); }}>
@@ -341,11 +409,11 @@ export function MenuBar() {
   const st = mcpStatus.value;
   return (
     <div class="menubar">
-      <div class="brand"><img src="/logo.svg" alt="" /><span>Lucent</span></div>
-      {MENUS.map((m, i) => (
+      <div class="brand"><img src="/logo.svg" alt="" /><span>LucentEdit</span></div>
+      {menus().map((m, i) => (
         <div class="menu-root">
           <button class={`menu-btn${open === i ? ' open' : ''}`} onClick={() => (openMenu.value = open === i ? null : i)} onMouseEnter={() => { if (open != null) openMenu.value = i; }}>{m.label}</button>
-          {open === i && <MenuItems items={m.items} />}
+          {open === i && <MenuItems items={menus()[i].items} />}
         </div>
       ))}
       <div class="spacer" />

@@ -3,10 +3,10 @@ import { signal } from '@preact/signals';
 import { cur, paint, tick, tool, viewOpts, cursorPos, needsFit, commit, touch, interaction, activeIndex } from '../core/store';
 import { useTick, usePaint } from '../core/store';
 import { renderDoc, fontString, fitText, renderHooks } from '../core/render';
-import { maskMeta, maskEdges } from '../core/selection';
+import { maskMeta, maskEdges, drawQuickMaskOverlay } from '../core/selection';
 import { layerMatrix, findLayer } from '../core/util';
 import { removeLayers, layerAt } from '../core/ops';
-import { toolById, zoomAt, handTool } from '../tools';
+import { toolById, zoomAt, handTool, unrotate } from '../tools';
 import { view, textEditing, PEvent, OverlayCtx, cropRect } from '../tools/types';
 import { beginTextEdit } from '../tools/vector';
 import { viewportSize, fitView, placeFiles, openFiles } from './commands';
@@ -14,6 +14,21 @@ import { fileToOpened } from '../core/io';
 import type { TextLayer } from '../core/types';
 
 export const spaceDown = signal(false);
+
+/** Document -> CSS-pixel matrix: zoom and pan, then the Rotate View angle around the viewport center. */
+export function viewMatrix(v: { zoom: number; panX: number; panY: number; rotation?: number }): DOMMatrix {
+  const m = new DOMMatrix();
+  if (v.rotation) {
+    const cx = view.width / 2, cy = view.height / 2;
+    m.translateSelf(cx, cy).rotateSelf(v.rotation).translateSelf(-cx, -cy);
+  }
+  return m.translateSelf(v.panX, v.panY).scaleSelf(v.zoom);
+}
+
+const GUIDE = '#22d3ee';
+/** Tool groups that paint, so they get every coalesced pointer event for smooth strokes. */
+const COALESCE = new Set(['brush', 'eraser', 'stamp', 'heal', 'historyBrush', 'blurTools', 'dodge']);
+let guideDrag: { axis: 'v' | 'h'; pos: number; index: number } | null = null;
 const RULER = 18;
 
 export function Viewport() {
@@ -28,8 +43,9 @@ export function Viewport() {
     const ds = cur();
     const v = ds?.view ?? { zoom: 1, panX: 0, panY: 0 };
     view.zoom = v.zoom;
-    view.toScreen = (x, y) => ({ x: x * v.zoom + v.panX, y: y * v.zoom + v.panY });
-    view.toDoc = (x, y) => ({ x: (x - v.panX) / v.zoom, y: (y - v.panY) / v.zoom });
+    const m = viewMatrix(v), inv = m.inverse();
+    view.toScreen = (x, y) => { const p = m.transformPoint({ x, y }); return { x: p.x, y: p.y }; };
+    view.toDoc = (x, y) => { const p = inv.transformPoint({ x, y }); return { x: p.x, y: p.y }; };
   };
 
   const drawBase = () => {
@@ -42,18 +58,19 @@ export function Viewport() {
     ctx.fillStyle = '#0a0a0f';
     ctx.fillRect(0, 0, c.width, c.height);
     if (!ds) return;
-    const { zoom, panX, panY } = ds.view;
+    const { zoom } = ds.view;
     const { width: W, height: H } = ds.doc;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const M = new DOMMatrix().scaleSelf(dpr).multiplySelf(viewMatrix(ds.view));
+    ctx.setTransform(M);
     // Page shadow
     ctx.save();
     ctx.shadowColor = 'rgba(0,0,0,0.6)';
-    ctx.shadowBlur = 28;
-    ctx.shadowOffsetY = 6;
+    ctx.shadowBlur = 28 * dpr;
+    ctx.shadowOffsetY = 6 * dpr;
     ctx.fillStyle = '#fff';
-    ctx.fillRect(panX, panY, W * zoom, H * zoom);
+    ctx.fillRect(0, 0, W, H);
     ctx.restore();
-    ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
+    ctx.setTransform(M);
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, 0, W, H);
@@ -61,14 +78,13 @@ export function Viewport() {
     ctx.imageSmoothingEnabled = zoom < 2;
     renderDoc(ctx, ds.doc, { checker: true });
     ctx.restore();
-    if (viewOpts.value.grid) {
+    if (viewOpts.value.grid && viewOpts.value.extras) {
       const step = niceStep(40 / zoom);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.strokeStyle = 'rgba(139,92,246,0.22)';
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 1 / zoom;
       ctx.beginPath();
-      for (let x = 0; x <= W; x += step) { const sx = Math.round(panX + x * zoom) + 0.5; ctx.moveTo(sx, panY); ctx.lineTo(sx, panY + H * zoom); }
-      for (let y = 0; y <= H; y += step) { const sy = Math.round(panY + y * zoom) + 0.5; ctx.moveTo(panX, sy); ctx.lineTo(panX + W * zoom, sy); }
+      for (let x = 0; x <= W; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+      for (let y = 0; y <= H; y += step) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
       ctx.stroke();
     }
   };
@@ -82,11 +98,12 @@ export function Viewport() {
     ctx.clearRect(0, 0, c.width, c.height);
     const ds = cur();
     if (!ds) return;
-    const { zoom, panX, panY } = ds.view;
-    if (ds.mask) {
+    const { zoom } = ds.view;
+    const M = new DOMMatrix().scaleSelf(dpr).multiplySelf(viewMatrix(ds.view));
+    if (ds.mask && viewOpts.value.extras) {
       const outline = maskMeta(ds.mask).outline;
       ctx.save();
-      ctx.setTransform(dpr * zoom, 0, 0, dpr * zoom, dpr * panX, dpr * panY);
+      ctx.setTransform(M);
       if (outline) {
         ctx.lineWidth = 1 / zoom;
         ctx.strokeStyle = '#000';
@@ -126,7 +143,25 @@ export function Viewport() {
         ctx.stroke();
       }
     }
-    if (viewOpts.value.rulers) drawRulers(ctx, c.width / dpr, c.height / dpr, ds.view, ds.doc.width, ds.doc.height);
+    drawQuickMaskOverlay(ctx, ds, M, zoom);
+    const g = ds.doc.guides;
+    if (viewOpts.value.extras && viewOpts.value.guides && (g?.v.length || g?.h.length || guideDrag)) {
+      ctx.save();
+      ctx.setTransform(M);
+      ctx.strokeStyle = GUIDE;
+      ctx.lineWidth = 1 / zoom;
+      ctx.beginPath();
+      const v = [...(g?.v ?? [])], h = [...(g?.h ?? [])];
+      if (guideDrag) {
+        const list = guideDrag.axis === 'v' ? v : h;
+        if (guideDrag.index >= 0) list[guideDrag.index] = guideDrag.pos; else list.push(guideDrag.pos);
+      }
+      for (const x of v) { ctx.moveTo(x, -1e5); ctx.lineTo(x, 1e5); }
+      for (const y of h) { ctx.moveTo(-1e5, y); ctx.lineTo(1e5, y); }
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (viewOpts.value.rulers && !ds.view.rotation) drawRulers(ctx, c.width / dpr, c.height / dpr, ds.view, ds.doc.width, ds.doc.height);
   };
 
   // Animation loop: base repaints only when asked; overlay animates (marching ants).
@@ -153,6 +188,7 @@ export function Viewport() {
       st.current.dpr = dpr;
       const r = el.getBoundingClientRect();
       viewportSize.w = r.width; viewportSize.h = r.height;
+      view.width = r.width; view.height = r.height;
       for (const c of [base.current!, over.current!]) {
         c.width = Math.round(r.width * dpr);
         c.height = Math.round(r.height * dpr);
@@ -197,6 +233,7 @@ export function Viewport() {
     st.current.dragging = true;
     interaction.active = true;
     st.current.panning = e.button === 1 || spaceDown.value;
+    if (!st.current.panning && startGuideDrag(pe)) return;
     activeTool().down?.(pe);
     st.current.last = pe;
   };
@@ -205,10 +242,15 @@ export function Viewport() {
     const pe = toEvent(e);
     cursorPos.value = cur() ? { x: Math.floor(pe.x), y: Math.floor(pe.y) } : null;
     const t = activeTool();
+    if (guideDrag && st.current.dragging) {
+      guideDrag.pos = Math.round(guideDrag.axis === 'v' ? pe.x : pe.y);
+      host.current!.style.cursor = guideDrag.axis === 'v' ? 'ew-resize' : 'ns-resize';
+      return;
+    }
     if (st.current.dragging) {
-      // Coalesced events give smooth brush strokes on fast moves.
+      // Coalesced events give smooth strokes on fast moves (painting and retouching tools).
       const evs = (e as any).getCoalescedEvents?.() as PointerEvent[] | undefined;
-      if (evs && evs.length > 1 && (tool.value === 'brush' || tool.value === 'eraser')) evs.forEach((ce) => t.move?.(toEvent(ce)));
+      if (evs && evs.length > 1 && COALESCE.has(toolById(tool.value).group) && !st.current.panning) evs.forEach((ce) => t.move?.(toEvent(ce)));
       else t.move?.(pe);
     } else t.hover?.(pe);
     host.current!.style.cursor = t.cursor?.(pe) ?? 'default';
@@ -218,6 +260,7 @@ export function Viewport() {
     if (!st.current.dragging) return;
     st.current.dragging = false;
     const pe = toEvent(e);
+    if (guideDrag) { endGuideDrag(pe); interaction.active = false; return; }
     try { activeTool().up?.(pe); } finally { interaction.active = false; }
     st.current.panning = false;
     try { host.current!.releasePointerCapture(e.pointerId); } catch { /* ok */ }
@@ -231,8 +274,9 @@ export function Viewport() {
     if (e.ctrlKey || e.metaKey || e.altKey) {
       zoomAt(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.0022)), e.clientX - r.left, e.clientY - r.top);
     } else {
-      ds.view.panX -= e.shiftKey ? e.deltaY : e.deltaX;
-      ds.view.panY -= e.shiftKey ? 0 : e.deltaY;
+      const [dx, dy] = unrotate(e.shiftKey ? e.deltaY : e.deltaX, e.shiftKey ? 0 : e.deltaY, ds.view.rotation);
+      ds.view.panX -= dx;
+      ds.view.panY -= dy;
       touch(false);
     }
   };
@@ -281,9 +325,42 @@ export function Viewport() {
       <canvas ref={base} />
       <canvas ref={over} style={{ pointerEvents: 'none' }} />
       <TextEditor />
-      {dropping && <div class="drop-hint">Drop images, SVG, PSD or .lucent files to {cur() ? 'place them' : 'open them'}</div>}
+      {dropping && <div class="drop-hint">Drop images, SVG, PSD or .lucentedit files to {cur() ? 'place them' : 'open them'}</div>}
     </div>
   );
+}
+
+/** Ruler drag creates a guide; with the Move tool, dragging an existing guide moves it. */
+function startGuideDrag(pe: PEvent): boolean {
+  const ds = cur();
+  if (!ds || ds.view.rotation) return false;
+  const g = (ds.doc.guides ??= { v: [], h: [] });
+  if (viewOpts.value.rulers && (pe.sy < RULER || pe.sx < RULER)) {
+    if (pe.sy < RULER && pe.sx < RULER) return false;
+    guideDrag = pe.sy < RULER ? { axis: 'h', pos: Math.round(pe.y), index: -1 } : { axis: 'v', pos: Math.round(pe.x), index: -1 };
+    return true;
+  }
+  if (tool.value !== 'move' || viewOpts.value.lockGuides || !viewOpts.value.guides) return false;
+  const tol = 4 / ds.view.zoom;
+  const vi = g.v.findIndex((x) => Math.abs(x - pe.x) < tol);
+  if (vi >= 0) { guideDrag = { axis: 'v', pos: g.v[vi], index: vi }; return true; }
+  const hi = g.h.findIndex((y) => Math.abs(y - pe.y) < tol);
+  if (hi >= 0) { guideDrag = { axis: 'h', pos: g.h[hi], index: hi }; return true; }
+  return false;
+}
+
+function endGuideDrag(pe: PEvent) {
+  const ds = cur(), d = guideDrag;
+  guideDrag = null;
+  if (!ds || !d) return;
+  const g = (ds.doc.guides ??= { v: [], h: [] });
+  const list = d.axis === 'v' ? g.v : g.h;
+  // Dropping back on a ruler (or outside the view) removes the guide.
+  const remove = pe.sx < RULER || pe.sy < RULER;
+  if (d.index >= 0) { if (remove) list.splice(d.index, 1); else list[d.index] = d.pos; }
+  else if (!remove) list.push(d.pos);
+  ds.dirty = true;
+  touch();
 }
 
 function niceStep(min: number) {
@@ -363,7 +440,7 @@ function TextEditor() {
   if (!l || !ds) return null;
   const m = layerMatrix(l);
   const v = ds.view;
-  const t = new DOMMatrix([v.zoom, 0, 0, v.zoom, v.panX, v.panY]).multiply(m);
+  const t = viewMatrix(v).multiply(m);
   const lh = l.size * l.lineHeight;
 
   const finish = () => {

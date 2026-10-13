@@ -120,9 +120,8 @@ export function select(ids: string[], ds: DocState | null = cur()) {
 
 // Tool & UI settings
 
-export type ToolId =
-  | 'move' | 'marquee' | 'lasso' | 'wand' | 'crop' | 'eyedropper' | 'brush' | 'eraser'
-  | 'bucket' | 'gradient' | 'text' | 'pen' | 'direct' | 'shape' | 'hand' | 'zoom';
+/** Tool ids are registered in tools/index.ts (TOOLS). */
+export type ToolId = string;
 
 export const tool = signal<ToolId>('move');
 export const fg = signal('#111827');
@@ -138,11 +137,12 @@ export const wand = signal({ tolerance: 32, contiguous: true });
 export const bucket = signal({ tolerance: 32, contiguous: true });
 export const gradientOpts = signal<{ type: 'linear' | 'radial' }>({ type: 'linear' });
 export const shapeOpts = signal({
-  shape: 'rect' as 'rect' | 'ellipse' | 'polygon' | 'star' | 'line',
+  shape: 'rect' as 'rect' | 'ellipse' | 'triangle' | 'polygon' | 'star' | 'line' | 'custom',
+  custom: 'heart',
   fill: true, stroke: false, strokeWidth: 2, radius: 0, sides: 6, points: 5, inner: 0.45,
 });
 export const textOpts = signal({ family: 'Inter Variable', size: 48, weight: 600, italic: false, align: 'left' as CanvasTextAlign });
-export const viewOpts = signal({ snap: true, grid: false, autoSelect: true, rulers: true });
+export const viewOpts = signal({ snap: true, grid: false, autoSelect: true, rulers: true, guides: true, lockGuides: false, extras: true });
 export const cursorPos = signal<{ x: number; y: number } | null>(null);
 export const mcpStatus = signal<{ port: number; active: number; last?: string; enabled: boolean }>({ port: 0, active: 0, enabled: false });
 

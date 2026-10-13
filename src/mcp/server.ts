@@ -21,7 +21,7 @@ import { FONTS } from '../ui/chrome';
 
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
-const GUIDE = `Lucent is a layered image editor + vector design tool (like Photoshop + Illustrator). You control the
+const GUIDE = `LucentEdit is a layered image editor + vector design tool (like Photoshop + Illustrator). You control the
 document that is open in the app; the user sees every change live and can undo it.
 
 Coordinates: pixels, origin at the top-left of the document, x to the right, y down. Each layer has a box
@@ -95,7 +95,7 @@ async function loadSource(src: string): Promise<{ name: string; bytes: Uint8Arra
 
 const TOOLS: ToolDef[] = [
   {
-    name: 'get_guide', description: 'How Lucent works for agents: coordinates, colors, gradients, text, effects and recommended workflow. Call this first.',
+    name: 'get_guide', description: 'How LucentEdit works for agents: coordinates, colors, gradients, text, effects and recommended workflow. Call this first.',
     inputSchema: { type: 'object', properties: {} }, run: () => GUIDE,
   },
   {
@@ -305,13 +305,14 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'update_layer', description: 'Change any layer properties: x, y, width, height, rotation, opacity, blend, visible, locked, name, fill, stroke, stroke_width, radius, sides, text, font_size, font_family, font_weight, italic, color, align, line_height, letter_spacing, effects.',
-    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, rotation: { type: 'number' }, opacity: { type: 'number' }, blend: { type: 'string', enum: BLEND_MODES }, visible: { type: 'boolean' }, locked: { type: 'boolean' }, name: { type: 'string' }, fill: paintSchema, stroke: paintSchema, stroke_width: { type: 'number' }, radius: { type: 'number' }, sides: { type: 'number' }, text: { type: 'string' }, font_size: { type: 'number' }, font_family: { type: 'string' }, font_weight: { type: 'number' }, italic: { type: 'boolean' }, color: paintSchema, align: { type: 'string' }, line_height: { type: 'number' }, letter_spacing: { type: 'number' }, effects: { type: 'object' } } },
+    name: 'update_layer', description: 'Change any layer properties: x, y, width, height, rotation, opacity, blend, visible, locked, name, fill, stroke, stroke_width, radius, sides, text, font_size, font_family, font_weight, italic, color, align, line_height, letter_spacing, effects, and params (for adjustment layers).',
+    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, rotation: { type: 'number' }, opacity: { type: 'number' }, blend: { type: 'string', enum: BLEND_MODES }, visible: { type: 'boolean' }, locked: { type: 'boolean' }, name: { type: 'string' }, fill: paintSchema, stroke: paintSchema, stroke_width: { type: 'number' }, radius: { type: 'number' }, sides: { type: 'number' }, text: { type: 'string' }, font_size: { type: 'number' }, font_family: { type: 'string' }, font_weight: { type: 'number' }, italic: { type: 'boolean' }, color: paintSchema, align: { type: 'string' }, line_height: { type: 'number' }, letter_spacing: { type: 'number' }, effects: { type: 'object' }, params: { type: 'object' } } },
     run: (a) => {
       const ds = need(cur());
       const l = getLayer(ds, a.id);
       const p: Json = {};
       for (const k of ['x', 'y', 'rotation', 'opacity', 'blend', 'visible', 'locked', 'name', 'radius', 'sides', 'text', 'italic', 'align', 'effects']) if (a[k] !== undefined) p[k] = a[k];
+      if (a.params !== undefined && l.type === 'adjust') l.params = { ...l.params, ...a.params };
       if (a.width !== undefined) p.w = num(a.width, l.w);
       if (a.height !== undefined) p.h = num(a.height, l.h);
       if (a.fill !== undefined) p.fill = toPaint(a.fill);
@@ -395,6 +396,47 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: 'add_adjustment_layer', description: 'Add a non-destructive adjustment layer (like Photoshop) that changes everything below it: any filter with point=true, e.g. curves, levels, hue-saturation, brightness-contrast, color-balance, vibrance, exposure, photo-filter, gradient-map, black & white (grayscale), invert, posterize, threshold. Edit later with update_layer {id, params:{...}}; limit it with set_layer_mask.',
+    inputSchema: { type: 'object', required: ['filter'], properties: { filter: { type: 'string' }, params: { type: 'object' }, name: { type: 'string' }, opacity: { type: 'number' } } },
+    run: async (a) => {
+      const ds = need(cur());
+      const { newAdjustment } = await import('../core/adjust');
+      const l = newAdjustment(ds, String(a.filter), a.params ?? {});
+      common(l, a);
+      commit(`AI: ${l.name} Layer`, ds);
+      return { ...layerSummary(l), filter: l.filter, params: l.params };
+    },
+  },
+  {
+    name: 'set_guides', description: 'Replace the document ruler guides (vertical x positions, horizontal y positions, in px). Shapes snap to guides when moved in the UI.',
+    inputSchema: { type: 'object', properties: { vertical: { type: 'array', items: { type: 'number' } }, horizontal: { type: 'array', items: { type: 'number' } } } },
+    run: (a) => {
+      const ds = need(cur());
+      ds.doc.guides = { v: (a.vertical ?? []).map(Number), h: (a.horizontal ?? []).map(Number) };
+      ds.dirty = true;
+      touch();
+      return ds.doc.guides;
+    },
+  },
+  {
+    name: 'merge_layers', description: 'mode "down": merge the given layer into the one below. "visible": merge all visible layers into one. "flatten": flatten the image to a single layer.',
+    inputSchema: { type: 'object', required: ['mode'], properties: { mode: { type: 'string', enum: ['down', 'visible', 'flatten'] }, id: { type: 'string' } } },
+    run: async (a) => {
+      const ds = need(cur());
+      const ops = await import('../core/ops');
+      if (a.mode === 'flatten') ops.flattenImage(ds);
+      else if (a.mode === 'down') { if (!a.id) throw new Error('id is required for mode "down"'); getLayer(ds, a.id); ds.selected = [a.id]; ops.mergeDown(ds); }
+      else {
+        const { flatten } = await import('../core/render');
+        const r = ops.newRaster(ds, 'Merged', flatten(ds.doc, 1, false));
+        ds.doc.layers = [...ds.doc.layers.filter((l) => !l.visible), r];
+        ds.selected = [r.id];
+        commit('AI: Merge Visible', ds);
+      }
+      return docInfo(ds);
+    },
+  },
+  {
     name: 'set_clipping_mask', description: 'Clip a layer to the layer directly below it (Photoshop clipping mask): the layer only shows where the one below has pixels. Perfect for putting a photo or gradient inside a shape or text.',
     inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, clip: { type: 'boolean', description: 'default true' } } },
     run: (a) => {
@@ -422,7 +464,7 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'apply_filter', description: `Apply a pixel filter/adjustment to a layer (vector layers are rasterized). Filters: ${FILTERS.map((f) => `${f.id}(${f.params.map((p) => `${p.key} ${p.min}..${p.max}`).join(', ')})`).join('; ')}.`,
+    name: 'apply_filter', description: `Apply a pixel filter/adjustment to a layer (vector layers are rasterized). Filters: ${FILTERS.map((f) => `${f.id}(${f.params.map((p: any) => p.type === 'select' ? `${p.key}: ${(p.options ?? []).map((o: any) => o.value ?? o).join('|')}` : p.type === 'color' ? `${p.key}: color` : p.type === 'checkbox' ? `${p.key}: bool` : p.type === 'text' ? `${p.key}: text (curves: "x,y;x,y")` : `${p.key} ${p.min}..${p.max}`).join(', ')})`).join('; ')}.`,
     inputSchema: { type: 'object', required: ['id', 'filter'], properties: { id: { type: 'string' }, filter: { type: 'string', enum: FILTERS.map((f) => f.id) }, params: { type: 'object' } } },
     run: (a) => {
       const ds = need(cur());
@@ -452,14 +494,14 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'export_document', description: 'Export the active document. format: png, jpg, webp, svg, psd or lucent. With path (desktop app), writes the file there; otherwise returns PNG/JPG/WebP previews inline.',
-    inputSchema: { type: 'object', required: ['format'], properties: { format: { type: 'string', enum: ['png', 'jpg', 'webp', 'svg', 'psd', 'lucent'] }, path: { type: 'string', description: 'Absolute output file path' }, scale: { type: 'number' }, quality: { type: 'number', description: '0-1 for jpg/webp' } } },
+    name: 'export_document', description: 'Export the active document. format: png, jpg, webp, svg, psd or lucentedit. With path (desktop app), writes the file there; otherwise returns PNG/JPG/WebP previews inline.',
+    inputSchema: { type: 'object', required: ['format'], properties: { format: { type: 'string', enum: ['png', 'jpg', 'webp', 'svg', 'psd', 'lucentedit'] }, path: { type: 'string', description: 'Absolute output file path' }, scale: { type: 'number' }, quality: { type: 'number', description: '0-1 for jpg/webp' } } },
     run: async (a) => {
       const ds = need(cur());
       const fmt = a.format as ExportFormat;
       const bytes = await exportBytes(ds.doc, fmt, { scale: num(a.scale, 1), quality: num(a.quality, 0.92) });
       if (a.path) {
-        if (!isTauri) throw new Error('Writing files requires the Lucent desktop app');
+        if (!isTauri) throw new Error('Writing files requires the LucentEdit desktop app');
         await writePath(a.path, bytes);
         return { saved: a.path, bytes: bytes.length };
       }
@@ -468,11 +510,11 @@ const TOOLS: ToolDef[] = [
         const url = await bytesToDataURL(bytes, fmt === 'jpg' ? 'image/jpeg' : `image/${fmt}`);
         return { __image: url.split(',')[1], __mime: fmt === 'jpg' ? 'image/jpeg' : `image/${fmt}`, note: 'Pass a path to save to disk.' };
       }
-      throw new Error('Pass a path to export PSD or .lucent files');
+      throw new Error('Pass a path to export PSD or .lucentedit files');
     },
   },
   {
-    name: 'open_file', description: 'Open an image, SVG, PSD or .lucent file from a local path (desktop app) or URL as a new document.',
+    name: 'open_file', description: 'Open an image, SVG, PSD or .lucentedit file from a local path (desktop app) or URL as a new document.',
     inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
     run: async (a) => {
       const f = await loadSource(String(a.path));
@@ -481,13 +523,13 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'save_document', description: 'Save the active document as an editable .lucent file to path (or its previous path).',
+    name: 'save_document', description: 'Save the active document as an editable .lucentedit file to path (or its previous path).',
     inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
     run: async (a) => {
       const ds = need(cur());
       const path = a.path ?? ds.doc.path;
-      if (!path) throw new Error('Provide a path, e.g. /home/me/Designs/poster.lucent');
-      await writePath(path, await exportBytes(ds.doc, 'lucent'));
+      if (!path) throw new Error('Provide a path, e.g. /home/me/Designs/poster.lucentedit');
+      await writePath(path, await exportBytes(ds.doc, 'lucentedit'));
       ds.doc.path = path; ds.dirty = false; touch();
       return { saved: path };
     },
@@ -539,7 +581,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucent', title: 'Lucent Design Studio', version: '0.1.0' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.2.0' },
         instructions: GUIDE,
       });
     }
@@ -579,8 +621,8 @@ export async function handleMcp(body: string): Promise<string | null> {
 
 /** Wire the desktop relay: the Rust side emits "mcp-request" for each POST /mcp. */
 export async function startMcpBridge() {
-  // Exposed for testing in a plain browser too: await window.lucentMcp('{"jsonrpc":"2.0",...}')
-  (window as any).lucentMcp = handleMcp;
+  // Exposed for testing in a plain browser too: await window.lucentEditMcp('{"jsonrpc":"2.0",...}')
+  (window as any).lucentEditMcp = handleMcp;
   if (!isTauri) return;
   const { listen } = await import('@tauri-apps/api/event');
   const { invoke } = await import('@tauri-apps/api/core');

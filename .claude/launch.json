@@ -2,7 +2,7 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "lucent-web",
+      "name": "lucentedit-web",
       "runtimeExecutable": "npm",
       "runtimeArgs": [
         "run",
