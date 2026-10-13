@@ -1,0 +1,28 @@
+[package]
+name = "lucent"
+version = "0.1.0"
+description = "Lucent: lightweight open-source image and vector editor"
+license = "MIT"
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+name = "lucent_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny_http = "0.12"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

@@ -1,0 +1,78 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux-x64
+            platform: ubuntu-22.04
+            args: ''
+            rust_targets: ''
+          - name: macos-arm64
+            platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+            rust_targets: 'aarch64-apple-darwin'
+          - name: macos-x64
+            platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+            rust_targets: 'x86_64-apple-darwin'
+          - name: windows-x64
+            platform: windows-latest
+            args: ''
+            rust_targets: ''
+    runs-on: ${{ matrix.platform }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install npm dependencies
+        shell: bash
+        run: npm ci || (rm -rf node_modules && npm install)
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: 'v__VERSION__'
+          releaseName: 'Lucent v__VERSION__'
+          releaseBody: |
+            Free, open-source image & vector editor with a built-in MCP server.
+
+            **Install:** see https://github.com/${{ github.repository }}#install
+            - macOS / Linux: `curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.sh | bash`
+            - Windows: `irm https://raw.githubusercontent.com/${{ github.repository }}/main/scripts/install.ps1 | iex`
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
