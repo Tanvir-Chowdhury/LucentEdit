@@ -7,6 +7,10 @@ import { beginTextEdit } from '../tools/vector';
 import { MenuBar, OptionsBar, Toolbar, Tabs, StatusBar, Tooltip, ToolFlyout } from './chrome';
 import { SelectDialogs } from './selectDialogs';
 import { PsDialogs, numberKey, ui } from './psCommands';
+import { ActionDialogs } from './ActionsPanel';
+import { LiquifyDialog } from './LiquifyDialog';
+import { ContentAwareDialogs } from './contentAware';
+import { actionForKey, playAction } from '../core/actions';
 import { Panels } from './panels';
 import { Viewport, spaceDown } from './Viewport';
 import { Dialogs, PresetCard, PRESETS, askConfirm } from './dialogs';
@@ -35,6 +39,8 @@ function onKeyDown(e: KeyboardEvent) {
   if (e.key === 'Escape' && ui.value.screen) { ui.value = { ...ui.value, screen: 0 }; return; }
   // Ctrl+V is handled by the paste event so system-clipboard images work.
   if ((e.ctrlKey || e.metaKey) && e.code === 'KeyV') return;
+  const act = actionForKey(e);
+  if (act) { e.preventDefault(); void playAction(act); return; }
   const c = matchShortcut(e);
   if (c) {
     e.preventDefault();
@@ -185,6 +191,9 @@ export function App() {
       <StatusBar />
       <Dialogs />
       <PsDialogs />
+      <ActionDialogs />
+      <LiquifyDialog />
+      <ContentAwareDialogs />
       <SelectDialogs />
       <ToolFlyout />
       <ColorPickerPopover />

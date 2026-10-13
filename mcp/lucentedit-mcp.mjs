@@ -47,7 +47,7 @@ async function forward(line) {
   // App unreachable: still complete the handshake so the client registers the server.
   for (const m of ids) {
     if (m.method === 'initialize') {
-      out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'lucentedit', version: '0.2.0' }, instructions: NOT_RUNNING } });
+      out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'lucentedit', version: '0.3.0' }, instructions: NOT_RUNNING } });
     } else if (m.method === 'tools/list') {
       out({ jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'get_guide', description: NOT_RUNNING, inputSchema: { type: 'object', properties: {} } }] } });
     } else if (m.method === 'ping') {

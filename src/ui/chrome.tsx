@@ -323,7 +323,7 @@ function filterMenu(): MenuEntry[] {
     groups.set(g, [...(groups.get(g) ?? []), `filter:${f.id}`]);
   }
   const names = [...groups.keys()].sort((x, y) => (order.indexOf(x) + 99) % 99 - (order.indexOf(y) + 99) % 99);
-  return ['lastFilter', '-', ...names.map((n) => ({ label: n, items: groups.get(n)! }))];
+  return ['lastFilter', '-', 'liquify', '-', ...names.map((n) => ({ label: n, items: groups.get(n)! }))];
 }
 
 function menus(): { label: string; items: MenuEntry[] }[] {
@@ -333,8 +333,8 @@ function menus(): { label: string; items: MenuEntry[] }[] {
     { label: 'File', items: ['new', 'open', '-', 'close', 'closeAll', '-', 'save', 'saveAs', 'saveCopy', 'revert', '-',
       { label: 'Export', items: ['exportPng', 'exportJpg', 'exportSvg', '-', 'export', 'saveForWeb'] }, '-', 'place'] },
     { label: 'Edit', items: ['undo', 'redo', 'stepForward', 'stepBackward', '-', 'cut', 'copy', 'copyMerged', 'paste', 'pasteInPlace', 'delete', '-', 'palette', '-',
-      'fillDialog', 'strokeDialog', 'fill', 'fillBg', '-', 'transform',
-      { label: 'Transform', items: ['rot180', 'rot90', 'rot-90', '-', 'flipH', 'flipV'] }, '-', 'purgeHistory', '-', 'shortcuts', 'preferences'] },
+      'fillDialog', 'contentAwareFill', 'strokeDialog', 'fill', 'fillBg', '-', 'transform',
+      { label: 'Transform', items: ['transformSkew', 'transformDistort', 'transformPerspective', 'transformWarp', '-', 'rot180', 'rot90', 'rot-90', '-', 'flipH', 'flipV'] }, '-', 'purgeHistory', '-', 'shortcuts', 'preferences'] },
     { label: 'Image', items: [
       { label: 'Mode', items: ['modeGray'] },
       { label: 'Adjustments', items: adjust.filter((f) => !f.id.startsWith('auto-')).map((f) => `filter:${f.id}`) },
@@ -348,16 +348,16 @@ function menus(): { label: string; items: MenuEntry[] }[] {
       { label: 'New Fill Layer', items: ['fillSolid', 'fillGradient'] },
       { label: 'New Adjustment Layer', items: adjust.filter((f) => (f as any).point).map((f) => `adj:${f.id}`) },
       { label: 'Layer Mask', items: ['maskReveal', 'maskHide', 'maskSel', 'maskHideSel', '-', 'maskToggle', 'maskApply', 'maskDelete'] },
-      'clip', '-', 'rasterize', '-', 'group', 'ungroup', 'hideLayers', '-',
+      'clip', '-', { label: 'Smart Objects', items: ['smartConvert', 'smartEdit', 'rasterize'] }, 'rasterize', '-', 'group', 'ungroup', 'hideLayers', '-',
       { label: 'Arrange', items: ['front', 'forward', 'backward', 'back'] },
       { label: 'Align', items: ['alignL', 'alignHC', 'alignR', 'alignT', 'alignVC', 'alignB'] },
       { label: 'Distribute', items: ['distH', 'distV'] }, '-', 'lockLayers', '-',
       'mergeDown', 'mergeVisible', 'stampVisible', 'flatten'] },
-    { label: 'Select', items: selectMenu() },
+    { label: 'Select', items: (() => { const m = selectMenu(); const i = m.indexOf('colorRange'); m.splice(i + 1, 0, 'selectSubject', 'selectSky'); return m; })() },
     { label: 'Filter', items: filterMenu() },
     { label: 'View', items: ['zoomIn', 'zoomOut', 'fit', 'actual', 'zoom200', '-', 'screenMode', '-', 'extras',
       { label: 'Show', items: ['showGuides', 'gridToggle'] }, '-', 'rulers', '-', 'snap', '-', 'lockGuides', 'clearGuides', 'newGuide', 'guidesFromShape'] },
-    { label: 'Window', items: ['winHistogram', 'winHistory', 'winInfo', 'winLayers', 'winNavigator', 'winProperties', 'winSwatches', '-', 'togglePanels'] },
+    { label: 'Window', items: ['actionsPanel', 'winHistogram', 'winHistory', 'winInfo', 'winLayers', 'winNavigator', 'winProperties', 'winSwatches', '-', 'togglePanels'] },
     { label: 'Help', items: ['shortcuts', 'mcp', '-', 'about'] },
   ];
 }

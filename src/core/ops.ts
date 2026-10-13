@@ -1,8 +1,8 @@
-import type { DocState, Layer, RasterLayer, ShapeLayer, TextLayer, GroupLayer, Paint, Stroke, SubPath } from './types';
-import { cur, commit, touch, select, selectedLayers, activeLayer, fg, textOpts, toast } from './store';
+import type { DocState, Layer, RasterLayer, ShapeLayer, TextLayer, GroupLayer, Paint, Stroke, SubPath, SmartLayer } from './types';
+import { cur, commit, touch, select, selectedLayers, activeLayer, fg, textOpts, toast, createDoc, openDocState } from './store';
 import {
   uid, makeCanvas, ctx2d, cloneCanvas, findLayer, containerOf, walk, bounds, unionRects,
-  duplicateLayer, refreshGroups, layerMatrix, Rect,
+  duplicateLayer, refreshGroups, layerMatrix, Rect, cloneLayers,
 } from './util';
 import { fitText, drawLayer, drawLayers } from './render';
 import { normalizePaths, shapeToPaths, shapePath2D } from './paths';
@@ -286,6 +286,41 @@ export function flattenImage(ds: DocState | null = cur()) {
   ds.doc.layers = [r];
   ds.selected = [r.id];
   commit('Flatten Image', ds);
+}
+
+// Smart Objects
+
+/** Layer > Smart Objects > Convert to Smart Object: wrap the selected layers in one smart layer. */
+export function convertToSmart(ds: DocState | null = cur()): SmartLayer | null {
+  if (!ds) return null;
+  const sel = topLevel(selectedLayers(ds), ds);
+  if (!sel.length) return null;
+  const b = unionRects(sel.filter((l) => l.type !== 'adjust').map(bounds));
+  if (!b || b.w < 1 || b.h < 1) { toast('Nothing visible to convert', 'error'); return null; }
+  const x = Math.floor(b.x), y = Math.floor(b.y), w = Math.ceil(b.x + b.w) - x, h = Math.ceil(b.y + b.h) - y;
+  const inner = cloneLayers(sel);
+  inner.forEach((l) => moveLayer(l, -x, -y));
+  const top = sel[sel.length - 1];
+  const arr = containerOf(ds.doc, top.id)!;
+  const below = arr.slice(0, arr.indexOf(top)).filter((l) => !sel.includes(l)).length;
+  removeLayers(sel.map((l) => l.id), ds, false);
+  const smart: SmartLayer = {
+    ...base(sel.length === 1 ? sel[0].name : 'Smart Object', x, y, w, h), type: 'smart', content: { width: w, height: h, layers: inner },
+  };
+  arr.splice(below, 0, smart);
+  ds.selected = [smart.id];
+  commit('Convert to Smart Object', ds);
+  return smart;
+}
+
+/** Layer > Smart Objects > Edit Contents: open the embedded document in its own tab. */
+export function editSmartContents(l: SmartLayer, ds: DocState | null = cur()) {
+  if (!ds) return;
+  const d = createDoc({ name: `${l.name}.psb`, width: l.content.width, height: l.content.height, background: null });
+  d.layers = cloneLayers(l.content.layers);
+  const child = openDocState(d, 'Open Smart Object');
+  child.smartLink = { docId: ds.doc.id, layerId: l.id };
+  toast('Edits here update the Smart Object in the original document');
 }
 
 // Layer masks and clipping masks

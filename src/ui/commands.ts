@@ -5,7 +5,7 @@ import {
 } from '../core/store';
 import {
   duplicateSelected, deleteSelected, groupSelected, ungroup, mergeDown, flattenImage, rasterize, reorder, newRaster,
-  addLayer, editablePixels, align, distribute, transformCanvas, cropDoc, moveLayer, flipLayers, topLevel, addMask, applyMask, setClip, MaskMode,
+  addLayer, editablePixels, align, distribute, transformCanvas, cropDoc, moveLayer, flipLayers, topLevel, addMask, convertToSmart, editSmartContents, applyMask, setClip, MaskMode,
 } from '../core/ops';
 import { selectAll, deselect, invertSelection, maskBounds, clearSelection, fillSelection, copyPixels, featherSelection } from '../core/selection';
 import { duplicateLayer, makeCanvas, ctx2d, walk, refreshGroups, unionRects, bounds } from '../core/util';
@@ -301,6 +301,8 @@ export const COMMANDS: Command[] = [
   { id: 'maskApply', label: 'Apply Layer Mask', run: withMask((l) => { applyMask(l); maskTarget.value = null; }, 'Apply Mask'), enabled: hasMaskLayer },
   { id: 'maskDelete', label: 'Delete Layer Mask', run: withMask((l) => { delete l.mask; maskTarget.value = null; }, 'Delete Mask'), enabled: hasMaskLayer },
   { id: 'clip', label: 'Create/Release Clipping Mask', keys: 'Mod+Alt+G', run: () => { const l = activeLayer(); if (l) { setClip(l, !l.clip); commit(l.clip ? 'Create Clipping Mask' : 'Release Clipping Mask'); } }, enabled: hasSel },
+  { id: 'smartConvert', label: 'Convert to Smart Object', run: () => convertToSmart(), enabled: hasSel },
+  { id: 'smartEdit', label: 'Edit Contents', run: () => { const l = activeLayer(); if (l?.type === 'smart') editSmartContents(l); }, enabled: () => activeLayer()?.type === 'smart' },
   { id: 'rasterize', label: 'Rasterize Layer', run: () => { const l = activeLayer(); if (l) { rasterize(l); commit('Rasterize'); } }, enabled: hasSel },
   { id: 'front', label: 'Bring to Front', keys: 'Mod+Shift+]', run: () => arrange('top'), enabled: hasSel },
   { id: 'forward', label: 'Bring Forward', keys: 'Mod+]', run: () => arrange('up'), enabled: hasSel },

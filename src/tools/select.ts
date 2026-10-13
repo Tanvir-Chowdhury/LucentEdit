@@ -1,5 +1,5 @@
 import type { Tool, PEvent, OverlayCtx } from './types';
-import { cropRect, view } from './types';
+import { cropRect, view, screenPath } from './types';
 import { cur, marquee, wand, touch } from '../core/store';
 import { setSelection, magicWand, deselect, SelMode } from '../core/selection';
 import { cropDoc } from '../core/ops';
@@ -41,16 +41,29 @@ export const marqueeTool: Tool = {
   overlay(o) {
     if (!rect) return;
     const { ctx } = o;
-    const a = o.toScreen(rect.x, rect.y), b = o.toScreen(rect.x + rect.w, rect.y + rect.h);
+    const r = rect, b = o.toScreen(r.x + r.w / 2, r.y + r.h);
+    const path = screenPath(o, (p) => {
+      if (marquee.value.shape === 'ellipse') p.ellipse(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, r.h / 2, 0, 0, Math.PI * 2);
+      else p.rect(r.x, r.y, r.w, r.h);
+    });
     ctx.save();
-    ctx.beginPath();
-    if (marquee.value.shape === 'ellipse') ctx.ellipse((a.x + b.x) / 2, (a.y + b.y) / 2, Math.abs(b.x - a.x) / 2, Math.abs(b.y - a.y) / 2, 0, 0, Math.PI * 2);
-    else ctx.rect(a.x + 0.5, a.y + 0.5, b.x - a.x, b.y - a.y);
-    ants(ctx, o.time);
+    antsPath(ctx, path, o.time);
     ctx.restore();
-    drawPill(ctx, `${Math.round(rect.w)} × ${Math.round(rect.h)}`, (a.x + b.x) / 2, b.y + 20);
+    drawPill(ctx, `${Math.round(r.w)} × ${Math.round(r.h)}`, b.x, b.y + 20);
   },
 };
+
+export function antsPath(ctx: CanvasRenderingContext2D, p: Path2D, time: number) {
+  ctx.lineWidth = 1;
+  ctx.setLineDash([]);
+  ctx.strokeStyle = '#000';
+  ctx.stroke(p);
+  ctx.setLineDash([4, 4]);
+  ctx.lineDashOffset = -((time / 60) % 8);
+  ctx.strokeStyle = '#fff';
+  ctx.stroke(p);
+  ctx.setLineDash([]);
+}
 
 export function ants(ctx: CanvasRenderingContext2D, time: number) {
   ctx.lineWidth = 1;
@@ -168,26 +181,29 @@ export const cropTool: Tool = {
     const r = cropRect.value;
     if (!ds || !r) return;
     const { ctx } = o;
-    const a = o.toScreen(r.x, r.y), b = o.toScreen(r.x + r.w, r.y + r.h);
+    const box = screenPath(o, (p) => p.rect(r.x, r.y, r.w, r.h));
+    const at = (fx: number, fy: number) => o.toScreen(r.x + r.w * fx, r.y + r.h * fy);
     ctx.save();
     ctx.fillStyle = 'rgba(8,8,12,0.55)';
-    ctx.beginPath();
-    ctx.rect(-1e4, -1e4, 3e4, 3e4);
-    ctx.rect(a.x, a.y, b.x - a.x, b.y - a.y);
-    ctx.fill('evenodd');
+    const shield = new Path2D();
+    shield.rect(-1e4, -1e4, 3e4, 3e4);
+    shield.addPath(box);
+    ctx.fill(shield, 'evenodd');
     ctx.strokeStyle = 'rgba(255,255,255,0.45)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (const f of [1 / 3, 2 / 3]) {
-      ctx.moveTo(a.x + (b.x - a.x) * f, a.y); ctx.lineTo(a.x + (b.x - a.x) * f, b.y);
-      ctx.moveTo(a.x, a.y + (b.y - a.y) * f); ctx.lineTo(b.x, a.y + (b.y - a.y) * f);
+      const p1 = at(f, 0), p2 = at(f, 1), p3 = at(0, f), p4 = at(1, f);
+      ctx.moveTo(p1.x, p1.y); ctx.lineTo(p2.x, p2.y);
+      ctx.moveTo(p3.x, p3.y); ctx.lineTo(p4.x, p4.y);
     }
     ctx.stroke();
     ctx.strokeStyle = '#fff';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+    ctx.stroke(box);
     for (const h of cropHandles(r)) { ctx.fillStyle = '#fff'; ctx.fillRect(h.p.x - 4, h.p.y - 4, 8, 8); ctx.strokeStyle = ACCENT; ctx.strokeRect(h.p.x - 4, h.p.y - 4, 8, 8); }
     ctx.restore();
-    drawPill(ctx, `${Math.round(r.w)} × ${Math.round(r.h)}  ·  Enter to crop`, (a.x + b.x) / 2, b.y + 20);
+    const bp = at(0.5, 1);
+    drawPill(ctx, `${Math.round(r.w)} × ${Math.round(r.h)}  ·  Enter to crop`, bp.x, bp.y + 20);
   },
 };

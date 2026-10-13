@@ -9,13 +9,17 @@ import { view } from '../tools/types';
 // Navigator, Info, Histogram and Swatches panels.
 
 /** Small flattened preview, re-rendered at most every 250 ms (cheap on low-spec PCs). */
-let previewCache: { key: string; c: HTMLCanvasElement } | null = null;
+/** Small flattened preview per history entry (the entry object identifies the document state). */
+const previewCache = new WeakMap<object, { size: number; c: HTMLCanvasElement }>();
 function preview(maxSize: number): HTMLCanvasElement | null {
   const ds = cur();
   if (!ds) return null;
-  const key = `${ds.doc.id}:${ds.hIndex}:${ds.doc.width}x${ds.doc.height}:${maxSize}`;
-  if (previewCache?.key !== key) previewCache = { key, c: flatten(ds.doc, Math.min(1, maxSize / Math.max(ds.doc.width, ds.doc.height))) };
-  return previewCache.c;
+  const snap = ds.history[ds.hIndex];
+  const hit = previewCache.get(snap);
+  if (hit && hit.size === maxSize) return hit.c;
+  const c = flatten(ds.doc, Math.min(1, maxSize / Math.max(ds.doc.width, ds.doc.height)));
+  previewCache.set(snap, { size: maxSize, c });
+  return c;
 }
 
 export function NavigatorPanel() {

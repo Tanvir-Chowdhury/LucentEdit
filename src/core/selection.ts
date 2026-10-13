@@ -3,7 +3,7 @@ import { signal } from '@preact/signals';
 import { makeCanvas, ctx2d, layerMatrix, parseColor, cloneCanvas, Rect } from './util';
 import { flatten, renderLayerToDocCanvas } from './render';
 import { dilate, erode, border, growMask, colorRangeAlpha, RangeSpec } from './selectops';
-import { touch } from './store';
+import { touch, activeIndex, cur, paint } from './store';
 
 // Pixel selections are document-sized alpha masks. Vector selections (marquee/lasso)
 // also keep their outline so marching ants can be drawn crisply.
@@ -334,8 +334,12 @@ export function selectLayerPixels(ds: DocState, layer: Layer, mode: SelMode = 'r
 /** Quick Mask mode: the selection becomes a paintable mask shown as a red overlay. */
 export const quickMask = signal(false);
 
+// Quick Mask is per document: it's on when the document has a quick mask. The signal mirrors
+// the active document so the toolbar button stays in sync when switching tabs.
+activeIndex.subscribe(() => { quickMask.value = !!cur()?.qmask; });
+
 export function toggleQuickMask(ds: DocState) {
-  if (quickMask.value) {
+  if (ds.qmask) {
     const m = ds.qmask;
     ds.qmask = undefined;
     quickMask.value = false;
@@ -352,25 +356,32 @@ export function toggleQuickMask(ds: DocState) {
 
 /** Brush/eraser stand-in for Quick Mask: a fresh copy of the quick mask placed at 0,0 (see paint.ts maskStandIn). */
 export function quickMaskStandIn(ds: DocState): RasterLayer | null {
-  if (!quickMask.value) return null;
-  if (!ds.qmask) { ds.qmask = ds.mask ?? makeCanvas(ds.doc.width, ds.doc.height); ds.mask = null; } // doc switched while on
+  if (!ds.qmask) return null;
   const canvas = (ds.qmask = cloneCanvas(ds.qmask)); // a selection made meanwhile still clips the stroke
   return { id: 'quickmask', name: 'mask', type: 'raster', canvas, visible: true, locked: false, opacity: 1, blend: 'normal', x: 0, y: 0, w: canvas.width, h: canvas.height, rotation: 0 };
 }
 
 let tint: HTMLCanvasElement | null = null;
+let tintSrc: HTMLCanvasElement | null = null;
+let tintVersion = -1;
 /** Rubylith: tint unselected areas red. Screen = pan + doc * zoom, in CSS px scaled by dpr. */
 /** `m` maps document pixels to device pixels (viewport transform including Rotate View). */
 export function drawQuickMaskOverlay(ctx: CanvasRenderingContext2D, ds: DocState, m: DOMMatrix, zoom: number) {
-  if (!quickMask.value || !ds.qmask) return;
+  if (!ds.qmask) return;
   const { width: W, height: H } = ds.qmask;
-  if (!tint || tint.width !== W || tint.height !== H) tint = makeCanvas(W, H);
-  const t = ctx2d(tint);
-  t.globalCompositeOperation = 'copy';
-  t.fillStyle = 'rgba(255,0,0,0.5)';
-  t.fillRect(0, 0, W, H);
-  t.globalCompositeOperation = 'destination-out';
-  t.drawImage(ds.qmask, 0, 0);
+  // Rebuild the red tint only when the quick mask itself changed.
+  // Strokes repaint the same canvas, so the repaint counter also invalidates it.
+  if (tintSrc !== ds.qmask || tintVersion !== paint.peek() || !tint || tint.width !== W || tint.height !== H) {
+    if (!tint || tint.width !== W || tint.height !== H) tint = makeCanvas(W, H);
+    const t = ctx2d(tint);
+    t.globalCompositeOperation = 'copy';
+    t.fillStyle = 'rgba(255,0,0,0.5)';
+    t.fillRect(0, 0, W, H);
+    t.globalCompositeOperation = 'destination-out';
+    t.drawImage(ds.qmask, 0, 0);
+    tintSrc = ds.qmask;
+    tintVersion = paint.peek();
+  }
   ctx.save();
   ctx.setTransform(m);
   ctx.imageSmoothingEnabled = zoom < 1;

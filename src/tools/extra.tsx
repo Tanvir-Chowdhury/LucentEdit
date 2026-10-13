@@ -5,8 +5,8 @@ import { view } from './types';
 import type { PathNode, ShapeLayer } from '../core/types';
 import { cur, commit, touch, fg, shapeOpts, activeLayer, toast } from '../core/store';
 import { newPath, addLayer, toPathProps } from '../core/ops';
-import { flatten } from '../core/render';
-import { ctx2d } from '../core/util';
+import { renderDoc } from '../core/render';
+import { ctx2d, makeCanvas } from '../core/util';
 import { moveTool, ACCENT, drawPill } from './move';
 import { editTarget, mapper, renormalize, hitNode, drawNodes } from './vector';
 
@@ -72,11 +72,16 @@ const freeformTool: Tool = {
 
 // Add / Delete Anchor and Convert Point act on the selected path or shape.
 
-function pathTarget(): ShapeLayer | null {
+/**
+ * The selected shape as an editable path. Live shapes are converted for hit-testing; call
+ * `undo()` when the click missed so a miss never changes the layer.
+ */
+function pathTarget(): (ShapeLayer & { undo: () => void }) | null {
   const l = editTarget();
   if (!l) { toast('Select a shape or path layer first', 'error'); return null; }
+  const before = { shape: l.shape, paths: l.paths, nw: l.nw, nh: l.nh };
   if (l.shape !== 'path') Object.assign(l, toPathProps(l));
-  return l;
+  return Object.assign(l, { undo: () => { Object.assign(l, before); delete (l as any).undo; } });
 }
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -85,7 +90,8 @@ const addAnchorTool: Tool = {
   cursor: () => 'crosshair',
   down(e) {
     const l = pathTarget();
-    if (!l?.paths) return;
+    if (!l) return;
+    if (!l.paths) { l.undo(); return; }
     const mp = mapper(l);
     let best = { d: Infinity, sp: -1, i: -1, t: 0 };
     l.paths.forEach((sp, si) => {
@@ -102,7 +108,8 @@ const addAnchorTool: Tool = {
         }
       }
     });
-    if (best.d > 8) return toast('Click on the path outline to add an anchor');
+    if (best.d > 8) { l.undo(); return toast('Click on the path outline to add an anchor'); }
+    delete (l as any).undo;
     // Split the cubic at t (de Casteljau) and insert the new node.
     const sp = l.paths[best.sp], a = sp.nodes[best.i], b = sp.nodes[(best.i + 1) % sp.nodes.length], t = best.t;
     const p01 = { x: lerp(a.x, a.ox, t), y: lerp(a.y, a.oy, t) }, p12 = { x: lerp(a.ox, b.ix, t), y: lerp(a.oy, b.iy, t) }, p23 = { x: lerp(b.ix, b.x, t), y: lerp(b.iy, b.y, t) };
@@ -121,8 +128,13 @@ const deleteAnchorTool: Tool = {
   down(e) {
     const l = pathTarget();
     const h = l && hitNode(l, e);
-    if (!l?.paths || !h || h.part !== 'anchor') return;
-    if (h.sp.nodes.length <= 2) return toast('A path needs at least two anchor points', 'error');
+    if (!l) return;
+    if (!l.paths || !h || h.part !== 'anchor' || h.sp.nodes.length <= 2) {
+      l.undo();
+      if (h && h.sp.nodes.length <= 2) toast('A path needs at least two anchor points', 'error');
+      return;
+    }
+    delete (l as any).undo;
     h.sp.nodes.splice(h.sp.nodes.indexOf(h.n), 1);
     renormalize(l);
     commit('Delete Anchor Point');
@@ -135,7 +147,9 @@ const convertPointTool: Tool = {
   down(e) {
     const l = pathTarget();
     const h = l && hitNode(l, e);
-    if (!l || !h || h.part !== 'anchor') return;
+    if (!l) return;
+    if (!h || h.part !== 'anchor') { l.undo(); return; }
+    delete (l as any).undo;
     const n = h.n, nodes = h.sp.nodes, i = nodes.indexOf(n);
     const isCorner = n.ix === n.x && n.iy === n.y && n.ox === n.x && n.oy === n.y;
     if (isCorner) {
@@ -160,12 +174,20 @@ function anchorsOverlay(o: OverlayCtx) {
 
 export const samplers = signal<{ x: number; y: number }[]>([]);
 
+/** Composite color at one document pixel: renders only that pixel (cheap enough per mouse move). */
+let probe: HTMLCanvasElement | null = null;
 export function sampleAt(x: number, y: number): [number, number, number, number] | null {
   const ds = cur();
   if (!ds) return null;
-  const f = flatten(ds.doc, 1, true);
-  if (x < 0 || y < 0 || x >= f.width || y >= f.height) return null;
-  const d = ctx2d(f).getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+  x = Math.floor(x); y = Math.floor(y);
+  if (x < 0 || y < 0 || x >= ds.doc.width || y >= ds.doc.height) return null;
+  probe ??= makeCanvas(1, 1);
+  const c = ctx2d(probe);
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.clearRect(0, 0, 1, 1);
+  c.translate(-x, -y);
+  renderDoc(c, ds.doc);
+  const d = c.getImageData(0, 0, 1, 1).data;
   return [d[0], d[1], d[2], d[3]];
 }
 

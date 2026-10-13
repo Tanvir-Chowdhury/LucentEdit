@@ -87,6 +87,7 @@ export async function serializeDoc(doc: Doc): Promise<Uint8Array> {
     let o: any = base;
     if (l.type === 'raster') { const { canvas, ...rest } = base; o = { ...rest, png: canvas.toDataURL('image/png') }; }
     if (l.type === 'group') o = { ...base, children: enc(l.children) };
+    if (l.type === 'smart') o = { ...base, content: { ...l.content, layers: enc(l.content.layers) } };
     if (mask) o.mask = { x: mask.x, y: mask.y, enabled: mask.enabled, png: mask.canvas.toDataURL('image/png') };
     return o;
   });
@@ -103,6 +104,7 @@ export async function deserializeDoc(bytes: Uint8Array): Promise<Doc> {
     let o: any = l;
     if (l.type === 'raster') { const { png, ...rest } = l; o = { ...rest, canvas: await imageToCanvas(png) }; }
     if (l.type === 'group') o = { ...l, children: await dec(l.children) };
+    if (l.type === 'smart') o = { ...o, content: { ...l.content, layers: await dec(l.content.layers) } };
     if (l.mask) o.mask = { x: l.mask.x, y: l.mask.y, enabled: l.mask.enabled, canvas: await imageToCanvas(l.mask.png) };
     return o as Layer;
   }));
@@ -254,8 +256,9 @@ export function buildSvg(doc: Doc): string {
       filter = ` filter="url(#${id})"`;
     }
     const attrs = `${style ? ` style="${style}"` : ''}${filter} data-name="${esc(l.name)}"`;
-    if (l.mask?.enabled) {
-      // SVG has no direct equivalent of a pixel mask; embed the masked result as an image.
+    if (l.mask?.enabled || l.type === 'smart' || l.type === 'adjust') {
+      if (l.type === 'adjust') return '';
+      // Pixel masks and Smart Objects have no direct SVG equivalent: embed the rendered result.
       const full = renderLayerToDocCanvas(doc, { ...l, opacity: 1, blend: 'normal', effects: undefined } as Layer);
       return `<image${attrs} width="${doc.width}" height="${doc.height}" href="${full.toDataURL('image/png')}"/>`;
     }

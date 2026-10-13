@@ -16,6 +16,8 @@ export const tick = signal(0);
 export const paint = signal(0);
 
 export const HISTORY_LIMIT = 40;
+/** Bumped when the oldest history step is dropped, so indexes into history can shift down. */
+export const historyShift = signal(0);
 
 /** True while the user drags on the canvas; agent calls wait so they never land mid-stroke. */
 export const interaction = { active: false };
@@ -82,10 +84,20 @@ export function commit(label: string, ds: DocState | null = cur()) {
   refreshGroups(ds.doc.layers);
   ds.history = ds.history.slice(0, ds.hIndex + 1);
   ds.history.push(snapshotOf(ds, label));
-  if (ds.history.length > HISTORY_LIMIT) ds.history.shift();
+  if (ds.history.length > HISTORY_LIMIT) { ds.history.shift(); historyShift.value++; }
   ds.hIndex = ds.history.length - 1;
   ds.dirty = true;
+  if (ds.smartLink) syncSmartParent(ds, label);
   touch();
+}
+
+/** A tab editing a Smart Object pushes its layers back into the parent document's layer. */
+function syncSmartParent(ds: DocState, label: string) {
+  const parent = docs.value.find((d) => d.doc.id === ds.smartLink!.docId);
+  const l = parent && findLayer(parent.doc, ds.smartLink!.layerId);
+  if (!parent || !l || l.type !== 'smart') return;
+  l.content = { width: ds.doc.width, height: ds.doc.height, layers: cloneLayers(ds.doc.layers) };
+  commit(`Edit Smart Object: ${label}`, parent);
 }
 
 function restore(ds: DocState, s: Snapshot) {

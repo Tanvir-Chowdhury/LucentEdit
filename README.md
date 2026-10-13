@@ -61,7 +61,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 | Area | What you get in v0.1 |
 | --- | --- |
 | **Documents** | Multi-document tabs, 12 size presets, native `.lucentedit` format, open PNG/JPG/WebP/GIF/SVG/PSD, drag & drop and paste images from the clipboard, Image Size, Canvas Size, rotate/flip canvas, trim |
-| **Layers** | Raster, vector shapes, pen paths, text, groups, adjustment layers and fill layers (solid, gradient). Blend modes, opacity, lock, visibility, drag to reorder, Layer via Copy/Cut, Merge Down/Visible, Stamp Visible, Flatten |
+| **Layers** | Raster, vector shapes, pen paths, text, groups, **Smart Objects** (scale without quality loss, Edit Contents in a new tab, changes sync back), adjustment layers and fill layers (solid, gradient). Blend modes, opacity, lock, visibility, drag to reorder, Layer via Copy/Cut, Merge Down/Visible, Stamp Visible, Flatten |
 | **Selection & transform** | Move with free transform (resize, rotate), snapping and smart guides, Rectangular/Elliptical/Single Row/Single Column Marquee, Lasso, Polygonal Lasso, Magnetic Lasso, Magic Wand, Quick Selection, Crop. Select > Color Range, Modify (Border, Smooth, Expand, Contract, Feather), Grow, Similar, Reselect, Save/Load Selection, Quick Mask |
 | **Painting & retouching** | Brush, Pencil, Color Replacement, Eraser, Background Eraser, Magic Eraser, Paint Bucket, Gradient, Clone Stamp, Healing Brush, Spot Healing Brush, Red Eye, History Brush, Blur, Sharpen, Smudge, Dodge, Burn, Sponge |
 | **Vector** | Pen, Freeform Pen, Add/Delete Anchor Point, Convert Point, Path Selection, Direct Selection, Rectangle, Ellipse, Triangle, Polygon, Star, Line, Custom Shapes |
@@ -69,6 +69,9 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 | **Text** | Point and paragraph text edited directly on the canvas, font family/weight/size, line height, tracking, alignment, gradient and stroked text |
 | **Fill & stroke** | Solid, linear and radial gradient fills. Strokes with dash, cap and join |
 | **Effects** | Drop shadow, outer glow |
+| **Transform & distort** | Free Transform plus Edit > Transform > Skew, Distort, Perspective (straight lines stay straight) and Warp (Bezier mesh with Arc, Bulge, Flag, Wave, Fish, Rise, Inflate, Twist presets), and Filter > Liquify (Forward Warp, Reconstruct, Pucker, Bloat, Twirl) |
+| **Content-aware** | Edit > Content-Aware Fill (PatchMatch inpainting in a background worker), Select > Subject and Select > Sky. All run on your machine with no AI model downloads, so they are estimates rather than Photoshop's cloud ML |
+| **Automation** | Actions panel: record, play, edit steps, assign F-keys, play on all open documents, saved between sessions |
 | **Masks** | Non-destructive layer masks (reveal/hide all, from selection; paint black to hide, white to reveal; enable, apply, delete) and clipping masks (Ctrl+Alt+G) |
 | **Adjustments** | Brightness/Contrast, Levels, Curves, Exposure, Vibrance, Hue/Saturation, Color Balance, Black & White, Photo Filter, Channel Mixer, Gradient Map, Selective Color, Shadows/Highlights, Invert, Posterize, Threshold, Desaturate, Equalize, Replace Color, Sepia, Auto Tone/Contrast/Color. 19 of them also work as non-destructive **adjustment layers** |
 | **Filters** | 50+ filters in Photoshop's submenus: Blur (Average, Blur, Blur More, Box, Gaussian, Motion, Radial, Surface), Distort (Pinch, Polar Coordinates, Ripple, Spherize, Twirl, Wave, ZigZag), Noise (Add Noise, Despeckle, Dust & Scratches, Median, Reduce Noise), Pixelate (Color Halftone, Crystallize, Facet, Fragment, Mezzotint, Mosaic, Pointillize), Render (Clouds, Difference Clouds, Fibers, Lens Flare, Vignette), Sharpen (Sharpen, Sharpen More, Sharpen Edges, Smart Sharpen, Unsharp Mask), Stylize (Diffuse, Emboss, Find Edges, Oil Paint, Solarize, Tiles, Trace Contour, Wind), Other (High Pass, Maximum, Minimum, Offset). Live preview, limited to the selection, Last Filter |
@@ -332,7 +335,8 @@ Use the HTTP URL `http://127.0.0.1:47800/mcp` if the client supports Streamable 
 | **Layout** | `align_layers`, `distribute_layers` |
 | **Masks & selections** | `set_layer_mask` (shape, selection, reveal, hide, apply), `set_clipping_mask`, `select_area` |
 | **Filters & adjustments** | `apply_filter` (72 filters), `add_adjustment_layer` (non-destructive) |
-| **Layers & guides** | `merge_layers` (down, visible, flatten), `set_guides` |
+| **Layers & guides** | `merge_layers` (down, visible, flatten), `set_guides`, `convert_to_smart_object`, `transform_layer` (distort / perspective by corners) |
+| **Content-aware** | `select_subject` (subject or sky), `content_aware_fill` |
 | **See the result** | `render_preview` (returns a PNG so the agent can look at its own work) |
 | **Files** | `export_document` (png, jpg, webp, svg, psd, lucentedit), `open_file`, `save_document` |
 | **History** | `undo`, `redo` |
@@ -395,6 +399,7 @@ All Photoshop default shortcuts (on macOS, `Ctrl` is `⌘`):
 | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` | Cut / Copy / Paste | `Ctrl+Shift+C` / `Ctrl+Shift+V` | Copy Merged / Paste in Place |
 | `Shift+Backspace` (`Shift+F5`) | Fill… | `Alt` / `Ctrl+Backspace` | Fill with foreground / background |
 | `Ctrl+T` | Free Transform | `Ctrl+F` | Search all commands |
+| `Ctrl+Shift+X` | Liquify | `Alt+F9` | Actions panel |
 | `Ctrl+K` | Preferences | `Ctrl+Alt+Shift+K` | Keyboard Shortcuts |
 | `Ctrl+L` / `Ctrl+M` / `Ctrl+B` | Levels / Curves / Color Balance | `Ctrl+U` / `Ctrl+Shift+U` | Hue/Saturation / Desaturate |
 | `Ctrl+I` | Invert | `Ctrl+Alt+Shift+B` | Black & White |
@@ -500,9 +505,11 @@ lucentedit/
 - [x] Clone stamp and healing
 - [x] Smudge / blur / dodge / burn brushes
 - [x] Adjustment layers, guides, Photoshop menus and shortcuts
-- [ ] Content-aware fill, Object Selection / Select Subject (need on-device AI models)
-- [ ] Skew, Distort, Perspective and Warp transforms; Liquify
-- [ ] Layer comps, actions, smart objects
+- [x] Content-Aware Fill, Select Subject, Select Sky (on-device, no models)
+- [x] Skew, Distort, Perspective and Warp transforms; Liquify
+- [x] Actions, Smart Objects
+- [ ] ML-quality Object Selection and Generative Fill (optional local models)
+- [ ] Smart filters, layer comps, artboards
 - [ ] Adobe Illustrator (`.ai`) import
 - [ ] Plugin API
 - [ ] Signed and notarized builds, auto-update

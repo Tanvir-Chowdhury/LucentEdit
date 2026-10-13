@@ -90,6 +90,14 @@ export function drawContent(ctx: CanvasRenderingContext2D, l: Layer) {
   if (l.type === 'raster') {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(l.canvas, 0, 0, l.w, l.h);
+  } else if (l.type === 'smart') {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, l.w, l.h);
+    ctx.clip();
+    ctx.scale(l.w / l.content.width, l.h / l.content.height);
+    drawLayers(ctx, l.content.layers);
+    ctx.restore();
   } else if (l.type === 'shape') drawShape(ctx, l);
   else if (l.type === 'text') drawText(ctx, l);
 }

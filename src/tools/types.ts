@@ -15,6 +15,17 @@ export interface OverlayCtx {
   zoom: number;
   toScreen: (x: number, y: number) => { x: number; y: number };
   time: number;
+  /** Document -> CSS px (includes Rotate View); use for rotated previews. */
+  matrix: DOMMatrix;
+}
+
+/** A document-space path mapped to screen space, so previews follow Rotate View. */
+export function screenPath(o: OverlayCtx, build: (p: Path2D) => void): Path2D {
+  const doc = new Path2D();
+  build(doc);
+  const out = new Path2D();
+  out.addPath(doc, o.matrix);
+  return out;
 }
 
 export interface Tool {

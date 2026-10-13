@@ -204,6 +204,7 @@ export function cloneLayers(layers: Layer[]): Layer[] {
     const { mask, ...rest } = l;
     let c: Layer;
     if (l.type === 'group') c = { ...(rest as any), children: cloneLayers(l.children) };
+    else if (l.type === 'smart') c = { ...(rest as any), effects: structuredClone(l.effects), content: { ...l.content, layers: cloneLayers(l.content.layers) } };
     else if (l.type === 'raster') c = { ...(rest as any), effects: structuredClone(l.effects) };
     else c = structuredClone(rest) as Layer;
     if (mask) c.mask = { ...mask };

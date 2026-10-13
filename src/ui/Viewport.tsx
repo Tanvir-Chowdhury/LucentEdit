@@ -125,7 +125,7 @@ export function Viewport() {
       ctx.restore();
     }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const o: OverlayCtx = { ctx, zoom, toScreen: view.toScreen, time };
+    const o: OverlayCtx = { ctx, zoom, toScreen: view.toScreen, time, matrix: viewMatrix(ds.view) };
     const t = toolById(tool.value)?.tool;
     ctx.save();
     t?.overlay?.(o);

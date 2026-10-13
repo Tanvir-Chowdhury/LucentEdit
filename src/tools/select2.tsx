@@ -226,11 +226,12 @@ export const quickSelectionTool: Tool = {
   overlay(o) {
     const { ctx } = o;
     if (qs) {
-      const p = o.toScreen(0, 0);
+      const m = o.matrix;
       ctx.save();
+      ctx.transform(m.a, m.b, m.c, m.d, m.e, m.f);
       ctx.globalAlpha = 0.35;
       ctx.imageSmoothingEnabled = o.zoom < 1;
-      ctx.drawImage(qs.view, p.x, p.y, qs.W * o.zoom, qs.H * o.zoom);
+      ctx.drawImage(qs.view, 0, 0, qs.W, qs.H);
       ctx.restore();
     }
     if (qsHover) {

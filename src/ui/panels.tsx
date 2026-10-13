@@ -7,10 +7,11 @@ import { selectLayerPixels } from '../core/selection';
 import { ui } from './psCommands';
 import { NavigatorPanel, InfoPanel, HistogramPanel, SwatchesPanel } from './infoPanels';
 import { historySource } from '../tools/retouch';
+import { ActionsPanel } from './ActionsPanel';
 import { BLEND_MODES } from '../core/types';
 import { tick, cur, commit, touch, select, selectedLayers, jumpTo, maskTarget } from '../core/store';
 import { useTick, usePaint } from '../core/store';
-import { setProps, moveInto, scaleLayer } from '../core/ops';
+import { setProps, moveInto, scaleLayer, editSmartContents } from '../core/ops';
 import { thumbnail } from '../core/render';
 import { walk, findLayer, containerOf, refreshGroups } from '../core/util';
 import { Icon } from './icons';
@@ -21,7 +22,7 @@ import { run } from './commands';
 const BLEND_LABEL = (b: string) => b.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ');
 
 const TOP_TABS: [string, string][] = [['properties', 'Properties'], ['navigator', 'Navigator'], ['info', 'Info'], ['histogram', 'Histogram']];
-const BOTTOM_TABS: [string, string][] = [['layers', 'Layers'], ['history', 'History'], ['swatches', 'Swatches']];
+const BOTTOM_TABS: [string, string][] = [['layers', 'Layers'], ['history', 'History'], ['actions', 'Actions'], ['swatches', 'Swatches']];
 
 export function Panels() {
   useTick();
@@ -41,7 +42,7 @@ export function Panels() {
       </div>
       <div class="panel grow" style={{ flex: '1 1 54%', minHeight: 220 }}>
         <div class="panel-head">{tabs(BOTTOM_TABS, 'bottomTab')}</div>
-        {u.bottomTab === 'history' ? <HistoryPanel /> : u.bottomTab === 'swatches' ? <SwatchesPanel /> : <LayersPanel />}
+        {u.bottomTab === 'history' ? <HistoryPanel /> : u.bottomTab === 'swatches' ? <SwatchesPanel /> : u.bottomTab === 'actions' ? <ActionsPanel /> : <LayersPanel />}
       </div>
     </div>
   );
@@ -190,7 +191,7 @@ function Transform({ l }: { l: Layer }) {
     live();
   };
   return (
-    <Section title={l.name} right={<span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{l.type === 'raster' ? 'Pixel layer' : l.type === 'shape' ? (l as ShapeLayer).shape === 'path' ? 'Vector path' : 'Shape' : l.type === 'text' ? 'Text' : l.type === 'adjust' ? 'Adjustment' : 'Group'}</span>}>
+    <Section title={l.name} right={<span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 500 }}>{l.type === 'raster' ? 'Pixel layer' : l.type === 'shape' ? (l as ShapeLayer).shape === 'path' ? 'Vector path' : 'Shape' : l.type === 'text' ? 'Text' : l.type === 'adjust' ? 'Adjustment' : l.type === 'smart' ? 'Smart Object' : 'Group'}</span>}>
       <div class="grid2">
         <NumField label="X" value={l.x} onChange={(v) => { setProps(l, { x: v }); live(); }} onCommit={done('Move')} />
         <NumField label="Y" value={l.y} onChange={(v) => { setProps(l, { y: v }); live(); }} onCommit={done('Move')} />
@@ -410,7 +411,11 @@ function LayerRow({ l, depth, ds, anchor }: { l: Layer; depth: number; ds: DocSt
           commit('Reorder Layers', ds);
         }}
         onClick={onClick}
-        onDblClick={() => (renaming.value = l.id)}
+        onDblClick={(e) => {
+          // Double-clicking a Smart Object's thumbnail opens its contents, like Photoshop.
+          if (l.type === 'smart' && (e.target as HTMLElement).closest('.thumb')) return editSmartContents(l, ds);
+          renaming.value = l.id;
+        }}
       >
         {l.type === 'group'
           ? <button class="twisty" onClick={(e) => { e.stopPropagation(); l.expanded = !l.expanded; touch(); }}><Icon name={l.expanded ? 'down' : 'right'} size={13} /></button>
@@ -463,6 +468,7 @@ function LayerRow({ l, depth, ds, anchor }: { l: Layer; depth: number; ds: DocSt
           ) : (
             <>
               {l.name}
+              {l.type === 'smart' && <span title="Smart Object" style={{ marginLeft: 6, color: 'var(--accent-3)', fontSize: 10, fontWeight: 700 }}>SO</span>}
               {l.effects && (l.effects.shadow?.enabled || l.effects.glow?.enabled) && <span style={{ marginLeft: 6, color: 'var(--accent)', fontSize: 10, fontWeight: 700 }}>fx</span>}
             </>
           )}

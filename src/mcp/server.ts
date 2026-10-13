@@ -9,7 +9,7 @@ import {
   toPaint, toStroke, duplicateLayerOp, groupIds, ungroupId, resizeCanvas, resizeImage,
 } from './bridge';
 import { parseSvgPath } from '../core/paths';
-import { filterById, FILTERS, applyFilter } from '../core/filters';
+import { filterById, FILTERS, applyFilter, resolveParams } from '../core/filters';
 import { docFromFile, exportBytes, readPath, writePath, isTauri, layersFromFile, ExportFormat } from '../core/io';
 import { flatten, drawLayer } from '../core/render';
 import { makeCanvas, ctx2d, bytesToDataURL, imageToCanvas, walk } from '../core/util';
@@ -312,7 +312,10 @@ const TOOLS: ToolDef[] = [
       const l = getLayer(ds, a.id);
       const p: Json = {};
       for (const k of ['x', 'y', 'rotation', 'opacity', 'blend', 'visible', 'locked', 'name', 'radius', 'sides', 'text', 'italic', 'align', 'effects']) if (a[k] !== undefined) p[k] = a[k];
-      if (a.params !== undefined && l.type === 'adjust') l.params = { ...l.params, ...a.params };
+      if (a.params !== undefined && l.type === 'adjust') {
+        const fd = filterById(l.filter);
+        l.params = fd ? resolveParams(fd, { ...l.params, ...a.params }) : { ...l.params, ...a.params };
+      }
       if (a.width !== undefined) p.w = num(a.width, l.w);
       if (a.height !== undefined) p.h = num(a.height, l.h);
       if (a.fill !== undefined) p.fill = toPaint(a.fill);
@@ -405,6 +408,68 @@ const TOOLS: ToolDef[] = [
       common(l, a);
       commit(`AI: ${l.name} Layer`, ds);
       return { ...layerSummary(l), filter: l.filter, params: l.params };
+    },
+  },
+  {
+    name: 'convert_to_smart_object', description: 'Wrap layers into one Smart Object (embedded document). It can then be scaled up/down without quality loss; rasterize later with apply_filter or merge.',
+    inputSchema: { type: 'object', required: ['ids'], properties: { ids: { type: 'array', items: { type: 'string' } }, name: { type: 'string' } } },
+    run: async (a) => {
+      const ds = need(cur());
+      a.ids.forEach((id: string) => getLayer(ds, id));
+      ds.selected = a.ids;
+      const { convertToSmart } = await import('../core/ops');
+      const l = convertToSmart(ds);
+      if (!l) throw new Error('Nothing to convert');
+      if (a.name) { l.name = a.name; touch(); }
+      return layerSummary(l);
+    },
+  },
+  {
+    name: 'select_subject', description: 'Select the main subject (kind "subject") or the sky (kind "sky") of the image with an on-device estimate (no AI model). Combine with set_layer_mask {mode:"selection"} to cut out a subject, or content_aware_fill to remove things.',
+    inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['subject', 'sky'] } } },
+    run: async (a) => {
+      const ds = need(cur());
+      const { selectBy } = await import('../ui/contentAware');
+      await selectBy(a.kind === 'sky' ? 'sky' : 'subject');
+      const { maskBounds } = await import('../core/selection');
+      return { selection: maskBounds(ds) };
+    },
+  },
+  {
+    name: 'content_aware_fill', description: 'Fill the current pixel selection (make one with select_area) on a pixel layer with surrounding content, removing objects or blemishes (PatchMatch inpainting). auto=true samples only near the hole.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string', description: 'Layer to fill (default: active layer)' }, auto: { type: 'boolean' }, new_layer: { type: 'boolean' }, color_adaptation: { type: 'boolean' } } },
+    run: async (a) => {
+      const ds = need(cur());
+      if (!ds.mask) throw new Error('Make a selection first (select_area)');
+      if (a.id) { getLayer(ds, a.id); ds.selected = [a.id]; }
+      const h = ds.hIndex;
+      const { contentAwareFill } = await import('../ui/contentAware');
+      await contentAwareFill({ auto: a.auto !== false, newLayer: !!a.new_layer, colorAdapt: a.color_adaptation !== false });
+      if (ds.hIndex === h) throw new Error('Content-Aware Fill did not run (is the active layer a visible pixel layer under the selection?)');
+      return docInfo(ds);
+    },
+  },
+  {
+    name: 'transform_layer', description: 'Distort a layer like Edit > Transform > Distort/Perspective: give the 4 new corner positions [[x,y] top-left, top-right, bottom-right, bottom-left] in document px. The layer is rasterized.',
+    inputSchema: { type: 'object', required: ['id', 'corners'], properties: { id: { type: 'string' }, corners: { type: 'array', items: { type: 'array', items: { type: 'number' } } } } },
+    run: async (a) => {
+      const ds = need(cur());
+      const l = getLayer(ds, a.id);
+      if (!Array.isArray(a.corners) || a.corners.length !== 4) throw new Error('corners needs 4 [x, y] points');
+      const { editablePixels } = await import('../core/ops');
+      const { renderQuad, boundsOf } = await import('../core/warp');
+      const r = editablePixels(l, ds);
+      if (!r) throw new Error('Layer is locked');
+      // Upright copy of the layer at document scale, then mapped into the quad.
+      const src = makeCanvas(r.w, r.h);
+      ctx2d(src).drawImage(r.canvas, 0, 0, r.w, r.h);
+      const quad = a.corners.map(([x, y]: number[]) => ({ x: Number(x), y: Number(y) }));
+      const b = boundsOf(quad);
+      const out = makeCanvas(Math.max(1, Math.ceil(b.w)), Math.max(1, Math.ceil(b.h)));
+      renderQuad(src, quad as any, out, b.x, b.y, 1);
+      Object.assign(r, { canvas: out, x: b.x, y: b.y, w: out.width, h: out.height, rotation: 0 });
+      commit('AI: Distort', ds);
+      return layerSummary(r);
     },
   },
   {
@@ -562,6 +627,13 @@ const TOOLS: ToolDef[] = [
   },
 ];
 
+/** Run one MCP tool directly (used by Actions playback). */
+export async function callTool(name: string, args: any): Promise<any> {
+  const t = TOOLS.find((x) => x.name === name);
+  if (!t) throw new Error(`Unknown tool: ${name}`);
+  return t.run(args ?? {});
+}
+
 function toContent(r: any) {
   if (r && typeof r === 'object' && r.__image) {
     return [{ type: 'image', data: r.__image, mimeType: r.__mime ?? 'image/png' }, ...(r.note ? [{ type: 'text', text: r.note }] : [])];
@@ -581,7 +653,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.2.0' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.3.0' },
         instructions: GUIDE,
       });
     }

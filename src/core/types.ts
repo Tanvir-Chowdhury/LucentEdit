@@ -105,7 +105,16 @@ export interface AdjustLayer extends Base {
   params: Record<string, any>;
 }
 
-export type Layer = RasterLayer | ShapeLayer | TextLayer | GroupLayer | AdjustLayer;
+/**
+ * Smart Object: an embedded document rendered into the layer box. Scaling re-renders the
+ * original content, so it never loses quality; "Edit Contents" opens it in its own tab.
+ */
+export interface SmartLayer extends Base {
+  type: 'smart';
+  content: { width: number; height: number; layers: Layer[] };
+}
+
+export type Layer = RasterLayer | ShapeLayer | TextLayer | GroupLayer | AdjustLayer | SmartLayer;
 
 export interface Doc {
   id: string;
@@ -145,4 +154,6 @@ export interface DocState {
   qmask?: HTMLCanvasElement;
   view: View;
   dirty: boolean;
+  /** Set when this tab edits a Smart Object's contents. */
+  smartLink?: { docId: string; layerId: string };
 }

@@ -4,8 +4,10 @@ import {
   Droplet, Triangle, Pointer, Sun, Moon, Cloud,
 } from 'lucide-preact';
 import type { Tool, PEvent, OverlayCtx, ToolMeta } from './types';
+import { screenPath } from './types';
 import type { DocState, Layer, RasterLayer } from '../core/types';
 import { cur, commit, touch, activeLayer, brush, fg, toast } from '../core/store';
+import { historyShift } from '../core/store';
 import { ctx2d, cloneCanvas, parseColor, rgbToHsl, hslToRgb, walk, findLayer } from '../core/util';
 import { editablePixels } from '../core/ops';
 import { pixelMatrix, maskForLayer, compositeMasked, floodRegion } from '../core/selection';
@@ -24,6 +26,8 @@ export const cloneOpts = signal({ aligned: true, sample: 'current' as 'current' 
 export const redEyeOpts = signal({ darkness: 50 });
 /** History snapshot index the History Brush paints from (the History panel may set it). */
 export const historySource = signal(0);
+// Keep pointing at the same snapshot when the oldest history step is dropped.
+historyShift.subscribe((n) => { if (n) historySource.value = Math.max(0, historySource.value - 1); });
 export const bgEraserOpts = signal({ tolerance: 32, sampling: 'once' as 'once' | 'continuous' });
 export const magicEraserOpts = signal({ tolerance: 32, contiguous: true, opacity: 1 });
 export const focusOpts = signal({ strength: 0.5 }); // blur / sharpen / smudge
@@ -525,10 +529,11 @@ export const redEyeTool: Tool = {
   },
   overlay(o) {
     if (!reA || !reB) return;
-    const a = o.toScreen(reA.x, reA.y), b = o.toScreen(reB.x, reB.y), { ctx } = o;
+    const a = reA, b = reB, { ctx } = o;
+    const box = screenPath(o, (p) => p.rect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y)));
     ctx.save();
     ctx.setLineDash([4, 3]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
-    ctx.strokeRect(Math.min(a.x, b.x) + 0.5, Math.min(a.y, b.y) + 0.5, Math.abs(b.x - a.x), Math.abs(b.y - a.y));
+    ctx.stroke(box);
     ctx.restore();
   },
 };
