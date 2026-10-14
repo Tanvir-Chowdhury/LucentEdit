@@ -11,10 +11,13 @@ import { flatten } from './render';
 // folder stays plain and usable outside the app (and syncable with Dropbox/Drive/git).
 
 export interface Asset {
-  id: string; // "<category>/<file>"
+  id: string; // "<category path>/<file>"
   name: string; // file name without extension
   file: string;
+  /** Folder path inside the library: "Logos" or "Brands/<brand>/Logos". */
   category: string;
+  /** Brand the asset belongs to (undefined for the shared library). */
+  brand?: string;
   ext: string;
   kind: 'image' | 'vector' | 'document' | 'font' | 'other';
   size: number;
@@ -23,6 +26,22 @@ export interface Asset {
   description?: string;
 }
 export interface Palette { name: string; colors: string[] }
+
+/** A brand kit, stored as Brands/<name>/brand.json next to the brand's own asset categories. */
+export interface BrandColor { name: string; hex: string; role?: 'primary' | 'secondary' | 'accent' | 'text' | 'background' | 'other' }
+export interface BrandFont { family: string; weight?: number }
+export interface Brand {
+  name: string;
+  colors: BrandColor[];
+  fonts: { heading?: BrandFont; body?: BrandFont; accent?: BrandFont };
+  guidelines: string;
+  tagline?: string;
+  website?: string;
+  /** Category folders of this brand, as library paths (Brands/<name>/<category>). */
+  categories: string[];
+}
+export const BRANDS_DIR = 'Brands';
+export const BRAND_CATEGORIES = ['Logos', 'Icons', 'Photos', 'Graphics', 'Templates', 'Fonts'];
 interface Meta { version: 1; assets: Record<string, { tags?: string[]; description?: string }>; palettes: Palette[] }
 
 export const DEFAULT_CATEGORIES = ['Logos', 'Icons', 'Photos', 'Backgrounds', 'Textures', 'Illustrations', 'Templates', 'Fonts'];
@@ -32,9 +51,19 @@ const KINDS: Record<string, Asset['kind']> = {
   svg: 'vector', psd: 'document', lucentedit: 'document', lucent: 'document', ttf: 'font', otf: 'font', woff: 'font', woff2: 'font',
 };
 
-export const library = signal<{ root: string | null; categories: string[]; assets: Asset[]; palettes: Palette[]; loading: boolean; error?: string }>({
-  root: null, categories: [], assets: [], palettes: [], loading: false,
+export const library = signal<{ root: string | null; categories: string[]; brands: Brand[]; assets: Asset[]; palettes: Palette[]; loading: boolean; error?: string }>({
+  root: null, categories: [], brands: [], assets: [], palettes: [], loading: false,
 });
+
+/** Brand currently used by the Type tool, pickers and AI agents (persisted per machine). */
+export const activeBrand = signal<string | null>((() => { try { return localStorage.getItem('lucentedit.activeBrand'); } catch { return null; } })());
+export function setActiveBrand(name: string | null) {
+  activeBrand.value = name;
+  try { name ? localStorage.setItem('lucentedit.activeBrand', name) : localStorage.removeItem('lucentedit.activeBrand'); } catch { /* storage unavailable */ }
+}
+export const brandByName = (name?: string | null) => (name ? library.value.brands.find((b) => b.name.toLowerCase() === name.toLowerCase()) : undefined);
+/** Display name of a category path ("Brands/Acme/Logos" -> "Logos"). */
+export const categoryLabel = (path: string) => path.split('/').pop()!;
 
 // File system: Tauri commands on desktop, File System Access API in Chromium browsers.
 
@@ -148,7 +177,7 @@ export async function restoreLibrary() {
 export function disconnectLibrary() {
   fs = null;
   try { localStorage.removeItem(STORE_KEY); } catch { /* storage unavailable */ }
-  library.value = { root: null, categories: [], assets: [], palettes: [], loading: false };
+  library.value = { root: null, categories: [], brands: [], assets: [], palettes: [], loading: false };
 }
 
 async function connect(root: string, f: LibFS) {
@@ -172,29 +201,91 @@ async function writeMeta(m: Meta) {
   await fs!.write(META_FILE, new TextEncoder().encode(JSON.stringify(m, null, 2)));
 }
 
+async function listAssets(dir: string, meta: Meta, brand?: string): Promise<Asset[]> {
+  const out: Asset[] = [];
+  for (const e of await fs!.list(dir)) {
+    if (e.isDir || e.name.startsWith('.')) continue;
+    const ext = e.name.split('.').pop()!.toLowerCase();
+    const id = `${dir}/${e.name}`;
+    out.push({
+      id, name: e.name.replace(/\.[^.]+$/, ''), file: e.name, category: dir, brand, ext, kind: KINDS[ext] ?? 'other',
+      size: e.size, modified: e.modified, tags: meta.assets[id]?.tags ?? [], description: meta.assets[id]?.description,
+    });
+  }
+  return out;
+}
+
+const subdirs = async (dir: string) => (await fs!.list(dir).catch(() => [] as Entry[])).filter((e) => e.isDir && !e.name.startsWith('.')).map((e) => e.name).sort((a, b) => a.localeCompare(b));
+
 export async function refreshLibrary() {
   if (!fs) return;
   library.value = { ...library.value, loading: true };
   try {
     const meta = await readMeta();
-    const cats = (await fs.list('')).filter((e) => e.isDir && !e.name.startsWith('.')).map((e) => e.name).sort((a, b) => a.localeCompare(b));
+    const cats = (await subdirs('')).filter((c) => c !== BRANDS_DIR);
     const assets: Asset[] = [];
-    for (const c of cats) {
-      for (const e of await fs.list(c)) {
-        if (e.isDir || e.name.startsWith('.')) continue;
-        const ext = e.name.split('.').pop()!.toLowerCase();
-        const id = `${c}/${e.name}`;
-        assets.push({
-          id, name: e.name.replace(/\.[^.]+$/, ''), file: e.name, category: c, ext, kind: KINDS[ext] ?? 'other',
-          size: e.size, modified: e.modified, tags: meta.assets[id]?.tags ?? [], description: meta.assets[id]?.description,
-        });
-      }
+    for (const c of cats) assets.push(...(await listAssets(c, meta)));
+    const brands: Brand[] = [];
+    for (const b of await subdirs(BRANDS_DIR)) {
+      const base = join(BRANDS_DIR, b);
+      const kit = await readBrandFile(base);
+      const bcats = (await subdirs(base)).map((c) => join(base, c));
+      for (const c of bcats) assets.push(...(await listAssets(c, meta, b)));
+      brands.push({ name: b, colors: kit.colors ?? [], fonts: kit.fonts ?? {}, guidelines: kit.guidelines ?? '', tagline: kit.tagline, website: kit.website, categories: bcats });
     }
-    library.value = { ...library.value, categories: cats, assets, palettes: meta.palettes, loading: false, error: undefined };
+    library.value = { ...library.value, categories: cats, brands, assets, palettes: meta.palettes, loading: false, error: undefined };
+    if (activeBrand.value && !brands.some((b) => b.name === activeBrand.value)) setActiveBrand(null);
     registerFonts(assets.filter((a) => a.kind === 'font'));
   } catch (e: any) {
     library.value = { ...library.value, loading: false, error: String(e?.message ?? e) };
   }
+}
+
+async function readBrandFile(base: string): Promise<Partial<Brand>> {
+  try { return JSON.parse(new TextDecoder().decode(await fs!.read(join(base, 'brand.json')))); } catch { return {}; }
+}
+
+async function writeBrandFile(b: Brand) {
+  const { categories, ...kit } = b;
+  void categories;
+  await need().write(join(BRANDS_DIR, b.name, 'brand.json'), new TextEncoder().encode(JSON.stringify(kit, null, 2)));
+}
+
+// Brands
+
+export async function createBrand(name: string, kit: Partial<Omit<Brand, 'name' | 'categories'>> = {}) {
+  const f = need(), n = safeName(name);
+  if (brandByName(n)) throw new Error(`Brand "${n}" already exists`);
+  for (const c of BRAND_CATEGORIES) await f.mkdir(join(BRANDS_DIR, n, c));
+  await writeBrandFile({ name: n, colors: kit.colors ?? [], fonts: kit.fonts ?? {}, guidelines: kit.guidelines ?? '', tagline: kit.tagline, website: kit.website, categories: [] });
+  await refreshLibrary();
+  return brandByName(n)!;
+}
+
+export async function updateBrand(name: string, patch: Partial<Omit<Brand, 'name' | 'categories'>>) {
+  const b = brandByName(name);
+  if (!b) throw new Error(`Brand "${name}" not found`);
+  await writeBrandFile({ ...b, ...patch, fonts: { ...b.fonts, ...(patch.fonts ?? {}) } });
+  await refreshLibrary();
+  return brandByName(name)!;
+}
+
+export async function renameBrand(from: string, to: string) {
+  const t = safeName(to);
+  const f = need();
+  await f.rename(join(BRANDS_DIR, from), join(BRANDS_DIR, t));
+  const meta = await readMeta();
+  const prefix = `${BRANDS_DIR}/${from}/`;
+  for (const k of Object.keys(meta.assets)) if (k.startsWith(prefix)) { meta.assets[`${BRANDS_DIR}/${t}/${k.slice(prefix.length)}`] = meta.assets[k]; delete meta.assets[k]; }
+  await writeMeta(meta);
+  if (activeBrand.value === from) setActiveBrand(t);
+  await refreshLibrary();
+}
+
+export async function deleteBrand(name: string) {
+  await need().remove(join(BRANDS_DIR, name));
+  if (activeBrand.value === name) setActiveBrand(null);
+  await refreshLibrary();
 }
 
 const need = () => { if (!fs) throw new Error('No Assets folder is set. Choose one in the Assets panel (Window > Assets).'); return fs; };
@@ -204,13 +295,13 @@ export const findAsset = (idOrName: string) => {
   return library.value.assets.find((a) => a.id.toLowerCase() === q) ?? library.value.assets.find((a) => a.name.toLowerCase() === q || a.file.toLowerCase() === q);
 };
 
-export async function createCategory(name: string) {
-  await need().mkdir(safeName(name));
+export async function createCategory(name: string, brand?: string) {
+  await need().mkdir(brand ? join(BRANDS_DIR, brand, safeName(name)) : safeName(name));
   await refreshLibrary();
 }
 
 export async function renameCategory(from: string, to: string) {
-  const f = need(), t = safeName(to);
+  const f = need(), parent = from.includes('/') ? from.slice(0, from.lastIndexOf('/')) : '', t = join(parent, safeName(to));
   await f.rename(from, t);
   const meta = await readMeta();
   for (const k of Object.keys(meta.assets)) if (k.startsWith(from + '/')) { meta.assets[t + k.slice(from.length)] = meta.assets[k]; delete meta.assets[k]; }
@@ -317,8 +408,9 @@ export async function saveLayersAsAsset(category: string, name: string, format: 
   doc.layers = cloneLayers(src);
   doc.layers.forEach((l) => moveLayer(l, -x, -y));
   const bytes = await exportBytes(doc, format);
+  category = category.split('/').map(safeName).join('/'); // keeps Brands/<brand>/<category> paths intact
   const file = uniqueName(category, `${safeName(name)}.${format}`);
-  if (!library.value.categories.includes(category)) await need().mkdir(safeName(category));
+  await need().mkdir(category);
   await need().write(join(category, file), bytes);
   await refreshLibrary();
   touch();

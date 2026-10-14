@@ -240,6 +240,50 @@ fn rename_path(from: String, to: String) -> Result<(), String> {
     std::fs::rename(&from, &to).map_err(|e| format!("{from}: {e}"))
 }
 
+/// An installed font family with the weights and styles available for it.
+#[derive(serde::Serialize, Clone)]
+struct FontFamily {
+    family: String,
+    weights: Vec<u16>,
+    italic: bool,
+}
+
+static SYSTEM_FONTS: std::sync::OnceLock<Vec<FontFamily>> = std::sync::OnceLock::new();
+
+/// Every font family installed on this computer (scanned once, then cached).
+/// The webview resolves these names itself, so they render directly in text layers.
+#[tauri::command]
+async fn list_system_fonts() -> Vec<FontFamily> {
+    SYSTEM_FONTS
+        .get_or_init(|| {
+            let mut db = fontdb::Database::new();
+            db.load_system_fonts();
+            let mut map: std::collections::BTreeMap<String, FontFamily> = std::collections::BTreeMap::new();
+            for face in db.faces() {
+                let Some((name, _)) = face.families.first() else { continue };
+                if name.starts_with('.') {
+                    continue; // hidden system UI fonts on macOS
+                }
+                let e = map.entry(name.to_lowercase()).or_insert_with(|| FontFamily {
+                    family: name.clone(),
+                    weights: Vec::new(),
+                    italic: false,
+                });
+                let w = face.weight.0;
+                if !e.weights.contains(&w) {
+                    e.weights.push(w);
+                }
+                e.italic |= face.style != fontdb::Style::Normal;
+            }
+            let mut out: Vec<FontFamily> = map.into_values().collect();
+            for f in &mut out {
+                f.weights.sort_unstable();
+            }
+            out
+        })
+        .clone()
+}
+
 #[tauri::command]
 fn initial_files() -> Vec<String> {
     std::env::args().skip(1).filter(|a| Path::new(a).is_file()).collect()
@@ -263,7 +307,8 @@ pub fn run() {
             list_dir,
             make_dir,
             remove_path,
-            rename_path
+            rename_path,
+            list_system_fonts
         ])
         .run(tauri::generate_context!())
         .expect("error while running LucentEdit");

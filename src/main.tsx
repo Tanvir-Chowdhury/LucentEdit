@@ -7,6 +7,7 @@ import './core/adjust';
 import * as store from './core/store';
 import { registerTools } from './tools';
 import { restoreLibrary } from './core/library';
+import { loadSystemFonts } from './core/fonts';
 import { SELECT_TOOLS } from './tools/select2';
 import { RETOUCH_TOOLS } from './tools/retouch';
 import { WARP_TOOLS, WARP_COMMANDS } from './tools/warp';
@@ -29,4 +30,6 @@ render(<App />, document.getElementById('app')!);
 startMcpBridge().catch((e) => console.error('MCP bridge failed to start', e));
 // Reopen the Assets folder chosen last time (desktop).
 restoreLibrary().catch(() => {});
+// Desktop: read installed fonts in the background so every font is ready in the pickers.
+if ('__TAURI_INTERNALS__' in window) loadSystemFonts();
 if (import.meta.env.DEV) (window as any).__lucentedit = { store };

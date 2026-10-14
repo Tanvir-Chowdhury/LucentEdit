@@ -5,7 +5,7 @@ import { cur, fg, bg, toast, selectedLayers, useTick } from '../core/store';
 import {
   library, librarySupported, chooseLibraryFolder, refreshLibrary, createCategory, renameCategory, deleteCategory,
   importIntoCategory, deleteAsset, renameAsset, setAssetInfo, placeAsset, saveLayersAsAsset, assetThumb, savePalette,
-  deletePalette, disconnectLibrary, Asset,
+  deletePalette, disconnectLibrary, Asset, brandByName, categoryLabel,
 } from '../core/library';
 import { pickFiles } from '../core/io';
 import { askConfirm, askText } from './dialogs';
@@ -13,6 +13,8 @@ import { askConfirm, askText } from './dialogs';
 // Assets panel: browse the user's asset folder by category, place assets, save layers as assets.
 
 export const assetCategory = signal<string>('All');
+/** '' = shared library, otherwise a brand name. */
+export const assetScope = signal<string>('');
 const query = signal('');
 export const ASSET_MIME = 'application/x-lucentedit-asset';
 
@@ -57,15 +59,19 @@ export function AssetsPanel() {
       </div>
     );
   }
-  const cat = lib.categories.includes(assetCategory.value) ? assetCategory.value : 'All';
+  const scopeBrand = brandByName(assetScope.value);
+  const scope = scopeBrand?.name ?? '';
+  const cats = scopeBrand ? scopeBrand.categories : lib.categories;
+  const inScope = lib.assets.filter((a) => (a.brand ?? '') === scope);
+  const cat = cats.includes(assetCategory.value) ? assetCategory.value : 'All';
   const q = query.value.trim().toLowerCase();
-  const list = lib.assets.filter((a) => (cat === 'All' || a.category === cat) && (!q || a.name.toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q))));
-  const target = cat === 'All' ? lib.categories[0] : cat;
+  const list = inScope.filter((a) => (cat === 'All' || a.category === cat) && (!q || a.name.toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q))));
+  const target = cat === 'All' ? cats[0] : cat;
   const saveSelected = (format: 'png' | 'svg' | 'lucentedit') => {
     if (!cur()) return toast('Open a document first', 'error');
     if (!target) return toast('Create a category first', 'error');
     const def = selectedLayers()[0]?.name ?? cur()!.doc.name;
-    askText(`Save to ${target} as ${format.toUpperCase()}`, 'Asset name', def, (name) => run(saveLayersAsAsset(target, name, format), `Saved ${name} to ${target}`));
+    askText(`Save to ${categoryLabel(target)} as ${format.toUpperCase()}`, 'Asset name', def, (name) => run(saveLayersAsAsset(target, name, format), `Saved ${name} to ${categoryLabel(target)}`));
   };
   return (
     <div class="assets">
@@ -75,21 +81,25 @@ export function AssetsPanel() {
         <button class="icon-btn" title="Change folder" onClick={() => run(chooseLibraryFolder())}><FolderOpen size={13} /></button>
         <button class="icon-btn" title="Disconnect folder (files are kept)" onClick={disconnectLibrary}><Unplug size={13} /></button>
       </div>
+      <select class="text-in" style={{ marginBottom: 6, height: 28 }} value={scope} onChange={(e) => { assetScope.value = (e.target as HTMLSelectElement).value; assetCategory.value = 'All'; }} title="Shared assets or a brand's own assets">
+        <option value="">Shared library</option>
+        {lib.brands.map((b) => <option value={b.name}>Brand: {b.name}</option>)}
+      </select>
       <div class="asset-cats">
-        {['All', ...lib.categories].map((c) => (
+        {['All', ...cats].map((c) => (
           <button class={`chip${c === cat ? ' on' : ''}`} onClick={() => (assetCategory.value = c)}
-            onDblClick={() => c !== 'All' && askText('Rename category', 'Name', c, (v) => run(renameCategory(c, v)))}
-            onContextMenu={(e) => { e.preventDefault(); if (c !== 'All') askConfirm(`Delete category "${c}"?`, 'The folder and every file in it are deleted from disk.', 'Delete', () => run(deleteCategory(c))); }}
-            title={c === 'All' ? 'All assets' : `${c} · double-click to rename · right-click to delete`}>
-            {c} <span>{c === 'All' ? lib.assets.length : lib.assets.filter((a) => a.category === c).length}</span>
+            onDblClick={() => c !== 'All' && askText('Rename category', 'Name', categoryLabel(c), (v) => run(renameCategory(c, v)))}
+            onContextMenu={(e) => { e.preventDefault(); if (c !== 'All') askConfirm(`Delete category "${categoryLabel(c)}"?`, 'The folder and every file in it are deleted from disk.', 'Delete', () => run(deleteCategory(c))); }}
+            title={c === 'All' ? 'All assets' : `${categoryLabel(c)} · double-click to rename · right-click to delete`}>
+            {c === 'All' ? 'All' : categoryLabel(c)} <span>{c === 'All' ? inScope.length : inScope.filter((a) => a.category === c).length}</span>
           </button>
         ))}
-        <button class="chip" title="New category" onClick={() => askText('New category', 'Name', '', (v) => run(createCategory(v)))}><FolderPlus size={12} /></button>
+        <button class="chip" title="New category" onClick={() => askText('New category', 'Name', '', (v) => run(createCategory(v, scope || undefined)))}><FolderPlus size={12} /></button>
       </div>
       <input class="text-in" placeholder="Search names and tags…" value={query.value} onInput={(e) => (query.value = (e.target as HTMLInputElement).value)} onKeyDown={(e) => e.stopPropagation()} style={{ margin: '6px 0' }} />
       <div class="asset-grid">
         {list.map((a) => <AssetCard a={a} key={a.id} />)}
-        {!list.length && <div class="empty" style={{ gridColumn: '1 / -1' }}>{lib.loading ? 'Loading…' : q ? 'No matches' : `No assets in ${cat} yet. Import files or save layers here.`}</div>}
+        {!list.length && <div class="empty" style={{ gridColumn: '1 / -1' }}>{lib.loading ? 'Loading…' : q ? 'No matches' : `No assets in ${cat === 'All' ? (scope || 'the shared library') : categoryLabel(cat)} yet. Import files or save layers here.`}</div>}
       </div>
       <div class="asset-foot">
         <button class="btn" title={`Copy files into ${target ?? 'a category'}`} disabled={!target} onClick={async () => { const files = await pickFiles(true); if (files.length) run(importIntoCategory(target!, files), `Imported ${files.length} file(s)`); }}><Upload size={13} /> Import</button>

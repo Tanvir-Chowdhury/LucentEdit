@@ -14,7 +14,6 @@ import { docFromFile, exportBytes, readPath, writePath, isTauri, layersFromFile,
 import { flatten, drawLayer } from '../core/render';
 import { makeCanvas, ctx2d, bytesToDataURL, imageToCanvas, walk } from '../core/util';
 import { pixelMatrix } from '../core/selection';
-import { FONTS } from '../ui/chrome';
 
 // Model Context Protocol server (Streamable HTTP, JSON responses). The Rust shell relays
 // POST /mcp bodies here; we answer with JSON-RPC.
@@ -33,7 +32,7 @@ Colors: any CSS color ("#7c3aed", "rgb(0 0 0 / 50%)", "white"). Fills may also b
 Text: add_text with font_family (e.g. "Inter Variable", "Georgia"), font_size in px, font_weight 100-900, width to wrap.
 Vectors: add_shape for rect/ellipse/polygon/star/line, add_path for any SVG path data (icons, logos, curves).
 Effects: update_layer {effects:{shadow:{enabled:true,color:"rgba(0,0,0,.35)",blur:30,x:0,y:12},glow:{enabled:true,color:"#a855f7",blur:30}}}.
-Assets: the user may keep a local Assets library (list_assets) with their logos, icons, photos, fonts and brand palettes; use them.
+Assets & brands: the user may keep a local Assets library (list_assets) and brand kits (list_brands / get_brand: colors, fonts, logos, guidelines). When designing for a brand, use its colors, fonts and logos and follow its guidelines. list_fonts shows every installed font.
 Workflow tips: new_document (or use the open one) → build background → shapes → text → effects → render_preview to
 check your work visually → fix issues → export_document. Use batch to run many operations in one call.`;
 
@@ -93,6 +92,8 @@ async function loadSource(src: string): Promise<{ name: string; bytes: Uint8Arra
   }
   return { name: src.split(/[\\/]/).pop()!, bytes: await readPath(src) };
 }
+
+const BRAND_SCHEMA = { type: 'object', properties: { colors: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, hex: { type: 'string' }, role: { type: 'string', enum: ['primary', 'secondary', 'accent', 'text', 'background', 'other'] } } } }, fonts: { type: 'object', description: '{heading?:{family,weight}, body?:{family,weight}, accent?:{family,weight}}; any installed family (see list_fonts)' }, guidelines: { type: 'string' }, tagline: { type: 'string' }, website: { type: 'string' } } };
 
 const TOOLS: ToolDef[] = [
   {
@@ -483,20 +484,88 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: 'list_brands', description: "The user's brands (stored in the Assets library): each with colors (name, hex, role), heading/body/accent fonts, guidelines, tagline, website and asset counts per category. The active brand is the one the user is working on: use its colors, fonts, logos and guidelines unless told otherwise.",
+    inputSchema: { type: 'object', properties: {} },
+    run: async () => {
+      const L = await import('../core/library');
+      if (!L.library.value.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets or Brands panel.');
+      await L.refreshLibrary();
+      return {
+        active: L.activeBrand.value,
+        brands: L.library.value.brands.map((b) => ({
+          name: b.name, colors: b.colors, fonts: b.fonts, guidelines: b.guidelines, tagline: b.tagline, website: b.website,
+          assets: Object.fromEntries(b.categories.map((c) => [L.categoryLabel(c), L.library.value.assets.filter((a) => a.category === c).length])),
+        })),
+      };
+    },
+  },
+  {
+    name: 'get_brand', description: 'Full brand kit for one brand (default: the active brand), including every asset (id usable with place_asset / get_asset_preview).',
+    inputSchema: { type: 'object', properties: { name: { type: 'string' } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      await L.refreshLibrary();
+      const b = L.brandByName(a.name ?? L.activeBrand.value);
+      if (!b) throw new Error(a.name ? `Brand "${a.name}" not found (list_brands)` : 'No active brand. Pass a name (list_brands).');
+      return {
+        name: b.name, active: L.activeBrand.value === b.name, colors: b.colors, fonts: b.fonts, guidelines: b.guidelines, tagline: b.tagline, website: b.website,
+        assets: L.library.value.assets.filter((x) => x.brand === b.name).map((x) => ({ id: x.id, name: x.name, category: L.categoryLabel(x.category), type: x.kind, format: x.ext, tags: x.tags, description: x.description })),
+      };
+    },
+  },
+  {
+    name: 'create_brand', description: 'Create a brand (folder with Logos, Icons, Photos, Graphics, Templates, Fonts categories) with optional colors, fonts and guidelines.',
+    inputSchema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, ...(BRAND_SCHEMA.properties), set_active: { type: 'boolean' } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      const b = await L.createBrand(String(a.name), { colors: a.colors, fonts: a.fonts, guidelines: a.guidelines, tagline: a.tagline, website: a.website });
+      if (a.set_active !== false && !L.activeBrand.value) L.setActiveBrand(b.name);
+      if (a.set_active) L.setActiveBrand(b.name);
+      return b;
+    },
+  },
+  {
+    name: 'update_brand', description: 'Change a brand kit: colors (replaces the list), fonts (merged by role), guidelines, tagline, website, or rename with new_name.',
+    inputSchema: { type: 'object', required: ['name'], properties: { name: { type: 'string' }, new_name: { type: 'string' }, ...(BRAND_SCHEMA.properties) } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      const patch: any = {};
+      for (const k of ['colors', 'fonts', 'guidelines', 'tagline', 'website']) if (a[k] !== undefined) patch[k] = a[k];
+      let b = await L.updateBrand(String(a.name), patch);
+      if (a.new_name) { await L.renameBrand(b.name, String(a.new_name)); b = L.brandByName(String(a.new_name))!; }
+      return b;
+    },
+  },
+  {
+    name: 'set_active_brand', description: 'Choose the brand the user is working on (or null to clear). Its fonts and colors are offered first in the app.',
+    inputSchema: { type: 'object', properties: { name: { type: ['string', 'null'] } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      if (a.name && !L.brandByName(a.name)) throw new Error(`Brand "${a.name}" not found`);
+      L.setActiveBrand(a.name ? L.brandByName(a.name)!.name : null);
+      touch();
+      return { active: L.activeBrand.value };
+    },
+  },
+  {
     name: 'list_assets', description: "Browse the user's Assets library (a local folder organized in categories: logos, icons, photos, backgrounds, textures, fonts, templates...). Filter by category and/or a search query matched against names and tags. Also returns the brand color palettes. Prefer the user's own assets and palettes when designing for them.",
-    inputSchema: { type: 'object', properties: { category: { type: 'string' }, query: { type: 'string' } } },
+    inputSchema: { type: 'object', properties: { category: { type: 'string' }, query: { type: 'string' }, brand: { type: 'string', description: 'Only this brand\'s assets ("shared" for the shared library)' } } },
     run: async (a) => {
       const L = await import('../core/library');
       const lib = L.library.value;
       if (!lib.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets panel (Window > Assets).');
       await L.refreshLibrary();
       const q = String(a.query ?? '').toLowerCase();
-      const list = L.library.value.assets.filter((x) => (!a.category || x.category.toLowerCase() === String(a.category).toLowerCase())
+      const brandQ = a.brand == null ? null : String(a.brand).toLowerCase();
+      const list = L.library.value.assets.filter((x) => (brandQ == null || (brandQ === 'shared' ? !x.brand : (x.brand ?? '').toLowerCase() === brandQ))
+        && (!a.category || L.categoryLabel(x.category).toLowerCase() === String(a.category).toLowerCase() || x.category.toLowerCase() === String(a.category).toLowerCase())
         && (!q || x.name.toLowerCase().includes(q) || x.tags.some((t) => t.toLowerCase().includes(q)) || (x.description ?? '').toLowerCase().includes(q)));
       return {
         folder: lib.root,
         categories: L.library.value.categories.map((c) => ({ name: c, count: L.library.value.assets.filter((x) => x.category === c).length })),
-        assets: list.map((x) => ({ id: x.id, name: x.name, category: x.category, type: x.kind, format: x.ext, size: x.size, tags: x.tags, description: x.description, path: L.assetPath(x) })),
+        brands: L.library.value.brands.map((b) => b.name),
+        activeBrand: L.activeBrand.value,
+        assets: list.map((x) => ({ id: x.id, name: x.name, brand: x.brand, category: L.categoryLabel(x.category), type: x.kind, format: x.ext, size: x.size, tags: x.tags, description: x.description, path: L.assetPath(x) })),
         palettes: L.library.value.palettes,
         fonts: L.libraryFonts.value,
       };
@@ -531,12 +600,14 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'save_asset', description: 'Save layers of the active document (default: selected layers, or the whole document) into the Assets library. format png (pixels), svg (editable vectors) or lucentedit (all layers). Creates the category if needed.',
-    inputSchema: { type: 'object', required: ['category', 'name'], properties: { category: { type: 'string' }, name: { type: 'string' }, format: { type: 'string', enum: ['png', 'svg', 'lucentedit'] }, layer_ids: { type: 'array', items: { type: 'string' } }, tags: { type: 'array', items: { type: 'string' } }, description: { type: 'string' } } },
+    inputSchema: { type: 'object', required: ['category', 'name'], properties: { category: { type: 'string' }, brand: { type: 'string', description: 'Save into this brand (default: shared library)' }, name: { type: 'string' }, format: { type: 'string', enum: ['png', 'svg', 'lucentedit'] }, layer_ids: { type: 'array', items: { type: 'string' } }, tags: { type: 'array', items: { type: 'string' } }, description: { type: 'string' } } },
     run: async (a) => {
       need(cur());
       const L = await import('../core/library');
       if (!L.library.value.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets panel.');
-      const x = await L.saveLayersAsAsset(String(a.category), String(a.name), a.format ?? 'png', a.layer_ids);
+      const b = a.brand ? L.brandByName(String(a.brand)) : undefined;
+      if (a.brand && !b) throw new Error(`Brand "${a.brand}" not found`);
+      const x = await L.saveLayersAsAsset(b ? `${L.BRANDS_DIR}/${b.name}/${a.category}` : String(a.category), String(a.name), a.format ?? 'png', a.layer_ids);
       if (a.tags || a.description) await L.setAssetInfo(x, { tags: a.tags, description: a.description });
       return { id: x.id, path: L.assetPath(x) };
     },
@@ -693,8 +764,20 @@ const TOOLS: ToolDef[] = [
     run: (a) => { for (let i = 0; i < Math.min(100, num(a.steps, 1)); i++) redo(); return docInfo(need(cur())); },
   },
   {
-    name: 'list_fonts', description: 'Font families that are safe to use in add_text.', inputSchema: { type: 'object', properties: {} },
-    run: () => FONTS.filter((f) => document.fonts.check(`16px "${f}"`) || ['serif', 'sans-serif', 'monospace', 'cursive', 'system-ui', 'Inter Variable'].includes(f)),
+    name: 'list_fonts', description: 'All fonts available to text layers: every font installed on the computer (with weights), fonts from the Assets library, and the active brand fonts.', inputSchema: { type: 'object', properties: {} },
+    run: async () => {
+      const F = await import('../core/fonts');
+      const L = await import('../core/library');
+      await F.loadSystemFonts();
+      const brand = L.brandByName(L.activeBrand.value);
+      return {
+        brand: brand ? { name: brand.name, fonts: brand.fonts } : null,
+        library: L.libraryFonts.value,
+        installed: F.systemFonts.value.map((f) => ({ family: f.family, weights: f.weights, italic: f.italic })),
+        generic: F.GENERIC_FONTS,
+        note: 'Any installed family name works in add_text font_family. Prefer the active brand fonts when designing for that brand.',
+      };
+    },
   },
   {
     name: 'batch', description: 'Run many tool calls in order in one request: {"operations":[{"tool":"add_shape","args":{...}}, ...]}. Stops at the first error. Results are returned in order.',
@@ -738,7 +821,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.4.0' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.5.0' },
         instructions: GUIDE,
       });
     }

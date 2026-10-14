@@ -19,7 +19,7 @@ import { Swatch, NumField, Seg, Slider } from './controls';
 import { COMMANDS, run, prettyKeys, cmd, fitView, actualPixels } from './commands';
 import { FILTERS } from '../core/filters';
 import { selectMenu } from './selectDialogs';
-import { libraryFonts } from '../core/library';
+import { FontPicker } from './FontPicker';
 import { zoomAt } from '../tools';
 import { viewportSize } from './commands';
 
@@ -114,15 +114,7 @@ export const FONTS = [
   'Impact', 'Comic Sans MS', 'Segoe UI', 'Roboto', 'Ubuntu', 'Noto Sans', 'Noto Serif', 'DejaVu Sans', 'Palatino', 'Garamond',
   'Futura', 'Avenir', 'Gill Sans', 'Brush Script MT', 'serif', 'sans-serif', 'monospace', 'cursive',
 ];
-export const systemFonts = signal<string[]>([]);
-export async function loadSystemFonts() {
-  const q = (window as any).queryLocalFonts;
-  if (!q) return;
-  try {
-    const list = await q();
-    systemFonts.value = [...new Set<string>(list.map((f: any) => f.family))].sort();
-  } catch { /* permission denied */ }
-}
+
 
 function updateText(props: Partial<TextLayer>) {
   textOpts.value = { ...textOpts.value, ...(props as any) };
@@ -295,20 +287,9 @@ function SelectionButtons() {
   );
 }
 
+/** Font family control used by the Type options bar and the Properties panel. */
 export function FontSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
-  const list = [...new Set([value, ...libraryFonts.value, ...FONTS, ...systemFonts.value])];
-  return (
-    <select value={value} style={{ width: 160, fontFamily: value }} onChange={(e) => {
-      const v = (e.target as HTMLSelectElement).value;
-      if (v === '__load') { loadSystemFonts(); return; }
-      if (v === '__custom') { askText('Use an installed font', 'Font family name', value, onChange); return; }
-      onChange(v);
-    }}>
-      {list.map((f) => <option value={f} style={{ fontFamily: f }}>{f}</option>)}
-      <option value="__custom">Other installed font…</option>
-      {'queryLocalFonts' in window && !systemFonts.value.length && <option value="__load">Load all system fonts…</option>}
-    </select>
-  );
+  return <FontPicker value={value} onChange={onChange} />;
 }
 
 // Menu bar
@@ -358,7 +339,7 @@ function menus(): { label: string; items: MenuEntry[] }[] {
     { label: 'Filter', items: filterMenu() },
     { label: 'View', items: ['zoomIn', 'zoomOut', 'fit', 'actual', 'zoom200', '-', 'screenMode', '-', 'extras',
       { label: 'Show', items: ['showGuides', 'gridToggle'] }, '-', 'rulers', '-', 'snap', '-', 'lockGuides', 'clearGuides', 'newGuide', 'guidesFromShape'] },
-    { label: 'Window', items: ['actionsPanel', 'winAssets', 'winHistogram', 'winHistory', 'winInfo', 'winLayers', 'winNavigator', 'winProperties', 'winSwatches', '-', 'togglePanels'] },
+    { label: 'Window', items: ['actionsPanel', 'winAssets', 'winBrands', 'winHistogram', 'winHistory', 'winInfo', 'winLayers', 'winNavigator', 'winProperties', 'winSwatches', '-', 'togglePanels'] },
     { label: 'Help', items: ['shortcuts', 'mcp', '-', 'about'] },
   ];
 }

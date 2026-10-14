@@ -322,6 +322,7 @@ export const PS_COMMANDS: Command[] = [
   // Window
   { id: 'winLayers', label: 'Layers', keys: 'F7', run: showPanel('bottom', 'layers') },
   { id: 'winAssets', label: 'Assets', run: showPanel('bottom', 'assets') },
+  { id: 'winBrands', label: 'Brands', run: showPanel('bottom', 'brands') },
   { id: 'winHistory', label: 'History', run: showPanel('bottom', 'history') },
   { id: 'winSwatches', label: 'Swatches', run: showPanel('bottom', 'swatches') },
   { id: 'winProperties', label: 'Properties', run: showPanel('top', 'properties') },
