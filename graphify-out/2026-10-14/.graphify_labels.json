@@ -52,18 +52,13 @@
   "50": "walk",
   "51": "clamp",
   "52": "filters-algo.check.ts",
-  "53": "touch",
+  "53": "controls.tsx",
   "54": "findLayerIn",
   "55": "runDab",
   "56": "infoPanels.tsx",
   "57": "warp.ts",
-  "58": "filters-algo.check.ts",
-  "59": "clamp",
-  "60": "Viewport.tsx",
-  "61": "setSelection",
+  "58": "gridFromQuad",
+  "59": "findLayerIn",
   "62": "cloneLayers",
-  "63": "render",
-  "64": "blurImg",
-  "65": "Rect",
-  "66": "DocState"
+  "63": "render"
 }

@@ -19,7 +19,7 @@ export const assetScope = signal<string>('');
 const query = signal('');
 export const ASSET_MIME = 'application/x-lucentedit-asset';
 
-function Thumb({ a }: { a: Asset }) {
+export function Thumb({ a }: { a: Asset }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => { let live = true; assetThumb(a).then((u) => live && setSrc(u)); return () => { live = false; }; }, [a.id, a.modified, a.size]);
   if (a.kind === 'font') return <div class="asset-font" style={{ fontFamily: cssFamily(a.name) }}>Aa</div>;
@@ -63,7 +63,7 @@ export function AssetsPanel() {
   const scopeBrand = brandByName(assetScope.value);
   const scope = scopeBrand?.name ?? '';
   const cats = scopeBrand ? scopeBrand.categories : lib.categories;
-  const inScope = lib.assets.filter((a) => (a.brand ?? '') === scope);
+  const inScope = lib.assets.filter((a) => (a.brand ?? '') === scope && !a.training);
   const cat = cats.includes(assetCategory.value) ? assetCategory.value : 'All';
   const q = query.value.trim().toLowerCase();
   const list = inScope.filter((a) => (cat === 'All' || a.category === cat) && (!q || a.name.toLowerCase().includes(q) || a.tags.some((t) => t.toLowerCase().includes(q))));

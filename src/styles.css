@@ -379,3 +379,35 @@ kbd { display: inline-block; padding: 0 5px; min-width: 18px; text-align: center
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
 @keyframes pulse { 50% { opacity: 0.45; } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+/* Brand Training */
+.training .muted, .training-intro { color: var(--muted); }
+.training-intro { margin: 0 0 8px; font-size: 11.5px; line-height: 1.5; }
+.training-hint { margin: 6px 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
+.training .asset-name .muted { font-size: 10.5px; }
+.training-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 10px; }
+.fit { margin-top: 10px; padding: 10px; border-radius: var(--r-2); background: var(--bg-2); border: 1px solid var(--line); }
+.fit-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; color: var(--text-2); }
+.fit-score { display: grid; place-items: center; min-width: 40px; height: 28px; padding: 0 6px; border-radius: var(--r-1); font-size: 15px; font-variant-numeric: tabular-nums; color: #fff; }
+.fit-score.good { background: var(--success); }
+.fit-score.mid { background: #c98a1b; }
+.fit-score.low { background: var(--danger); }
+.fit-list { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; font-size: 11.5px; line-height: 1.45; color: var(--text-2); }
+.fit-list li { display: grid; grid-template-columns: 14px 1fr; gap: 6px; }
+.fit-list li.ok > span:first-child { color: var(--success); }
+.fit-list li.bad > span:first-child { color: #e9a23b; font-weight: 700; }
+.fit-list b { color: var(--text); font-weight: 500; }
+.profile-palette { display: flex; height: 18px; margin-bottom: 8px; border-radius: var(--r-1); overflow: hidden; box-shadow: 0 0 0 1px var(--line-2); }
+.profile-palette i { flex-basis: 0; }
+.profile-summary { display: grid; gap: 4px; margin: 0; padding-left: 16px; font-size: 11.5px; line-height: 1.5; color: var(--text-2); }
+.layouts { display: flex; flex-wrap: wrap; gap: 6px; }
+.layout-card { display: grid; justify-items: center; gap: 4px; padding: 6px; border-radius: var(--r-2); border: 1px solid var(--line-2); background: var(--bg-2); color: var(--text-2); }
+.layout-card:hover { background: var(--bg-3); border-color: var(--accent); }
+.layout-card small { font-size: 10.5px; }
+.layout-card svg { display: block; background: var(--bg-0); border-radius: 2px; }
+.slot { fill: #5a5a63; }
+.slot.photo, .slot.background { fill: #3a3a40; }
+.slot.headline { fill: #e8e8ea; }
+.slot.subhead, .slot.body, .slot.legal { fill: #9a9aa3; }
+.slot.cta, .slot.price, .slot.badge { fill: var(--accent); }
+.slot.logo { fill: #c9c9cf; }

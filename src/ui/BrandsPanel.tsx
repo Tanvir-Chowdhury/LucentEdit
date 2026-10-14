@@ -14,6 +14,7 @@ import { Swatch } from './controls';
 import { askConfirm, askText } from './dialogs';
 import { assetScope, assetCategory } from './AssetsPanel';
 import { ui } from './psCommands';
+import { TrainingSection } from './TrainingPanel';
 
 // Brands panel: several brand kits (colors, fonts, guidelines, assets) side by side.
 
@@ -124,6 +125,8 @@ function BrandEditor({ b }: { b: Brand }) {
       <div class="asset-cats" style={{ marginBottom: 6 }}>
         {counts.map(([c, n]) => <button class="chip" onClick={() => openAssets(c)}>{categoryLabel(c)} <span>{n}</span></button>)}
       </div>
+
+      <TrainingSection b={b} />
 
       <div class="section-title" style={{ marginTop: 10 }}>Details</div>
       <div class="kv" style={{ gridTemplateColumns: '70px 1fr', gap: 6 }}>

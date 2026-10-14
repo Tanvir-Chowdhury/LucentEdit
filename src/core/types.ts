@@ -52,6 +52,8 @@ interface Base {
   mask?: LayerMask;
   /** Clipping mask: only visible where the layer below has pixels. */
   clip?: boolean;
+  /** What the layer is in the design (headline, logo, cta...): used by Brand Training and agents. */
+  role?: string;
 }
 
 export interface RasterLayer extends Base {

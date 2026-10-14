@@ -24,6 +24,8 @@ export interface Asset {
   modified: number;
   tags: string[];
   description?: string;
+  /** Brand Training example (Brands/<brand>/Training/<bucket>): not a placeable brand asset. */
+  training?: 'approved' | 'inspiration' | 'avoid';
 }
 export interface Palette { name: string; colors: string[] }
 
@@ -42,6 +44,10 @@ export interface Brand {
 }
 export const BRANDS_DIR = 'Brands';
 export const BRAND_CATEGORIES = ['Logos', 'Icons', 'Photos', 'Graphics', 'Templates', 'Fonts'];
+/** Brand Training lives next to the brand's categories: Brands/<brand>/Training/<Approved|Inspiration|Avoid>. */
+export const TRAINING_DIR = 'Training';
+export const TRAINING_BUCKETS = { approved: 'Approved', inspiration: 'Inspiration', avoid: 'Avoid' } as const;
+export const trainingPath = (brand: string, bucket: keyof typeof TRAINING_BUCKETS) => `${BRANDS_DIR}/${brand}/${TRAINING_DIR}/${TRAINING_BUCKETS[bucket]}`;
 interface Meta { version: 1; assets: Record<string, { tags?: string[]; description?: string }>; palettes: Palette[] }
 
 export const DEFAULT_CATEGORIES = ['Logos', 'Icons', 'Photos', 'Backgrounds', 'Textures', 'Illustrations', 'Templates', 'Fonts'];
@@ -234,8 +240,12 @@ export async function refreshLibrary() {
     for (const b of await subdirs(BRANDS_DIR)) {
       const base = join(BRANDS_DIR, b);
       const kit = await readBrandFile(base);
-      const bcats = (await subdirs(base)).map((c) => join(base, c));
+      const bcats = (await subdirs(base)).filter((c) => c !== TRAINING_DIR).map((c) => join(base, c));
       for (const c of bcats) assets.push(...(await listAssets(c, meta, b)));
+      for (const [bucket, dir] of Object.entries(TRAINING_BUCKETS) as [keyof typeof TRAINING_BUCKETS, string][]) {
+        const items = await listAssets(join(base, TRAINING_DIR, dir), meta, b).catch(() => [] as Asset[]);
+        assets.push(...items.map((a) => ({ ...a, training: bucket })));
+      }
       brands.push({ name: b, colors: kit.colors ?? [], fonts: kit.fonts ?? {}, guidelines: kit.guidelines ?? '', tagline: kit.tagline, website: kit.website, categories: bcats });
     }
     library.value = { ...library.value, categories: cats, brands, assets, palettes: meta.palettes, loading: false, error: undefined };
@@ -262,6 +272,7 @@ export async function createBrand(name: string, kit: Partial<Omit<Brand, 'name' 
   const f = need(), n = safeName(name);
   if (brandByName(n)) throw new Error(`Brand "${n}" already exists`);
   for (const c of BRAND_CATEGORIES) await f.mkdir(join(BRANDS_DIR, n, c));
+  for (const c of Object.values(TRAINING_BUCKETS)) await f.mkdir(join(BRANDS_DIR, n, TRAINING_DIR, c));
   await writeBrandFile({ name: n, colors: kit.colors ?? [], fonts: kit.fonts ?? {}, guidelines: kit.guidelines ?? '', tagline: kit.tagline, website: kit.website, categories: [] });
   await refreshLibrary();
   return brandByName(n)!;
@@ -374,6 +385,13 @@ export async function deletePalette(name: string) {
 }
 
 export const readAsset = (a: Asset) => need().read(a.id);
+/** Text files inside the library (Brand Training's style.json); null when the file is missing. */
+export async function readLibraryText(rel: string): Promise<string | null> {
+  const f = need(), dir = rel.slice(0, Math.max(0, rel.lastIndexOf('/'))), name = rel.slice(rel.lastIndexOf('/') + 1);
+  if (!(await f.list(dir).catch(() => [] as Entry[])).some((e) => e.name === name)) return null;
+  return new TextDecoder().decode(await f.read(rel));
+}
+export const writeLibraryText = (rel: string, text: string) => need().write(rel, new TextEncoder().encode(text));
 export const assetPath = (a: Asset) => need().abs(a.id);
 
 /** Place an asset in the active document; optional box in document px (aspect kept if only one side). */

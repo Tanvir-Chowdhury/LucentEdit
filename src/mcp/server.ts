@@ -48,6 +48,7 @@ Text: add_text with font_family (e.g. "Inter Variable", "Georgia"), font_size in
 Vectors: add_shape for rect/ellipse/polygon/star/line, add_path for any SVG path data (icons, logos, curves).
 Effects: update_layer {effects:{shadow:{enabled:true,color:"rgba(0,0,0,.35)",blur:30,x:0,y:12},glow:{enabled:true,color:"#a855f7",blur:30}}}.
 Assets & brands: the user may keep a local Assets library (list_assets) and brand kits (list_brands / get_brand: colors, fonts, logos, guidelines). When designing for a brand, use its colors, fonts and logos and follow its guidelines. list_fonts shows every installed font.
+Brand Training: brands can have a training library of past designs. Before designing for a brand, call get_brand_style (its learned look and layouts) and find_similar_examples / get_example (nearest past designs). Start from recreate_layout when a learned layout fits, use only that brand's assets, then call score_brand_fit and fix what it lists until the score is 85 or more. Inspiration examples are references: take principles, never copy them.
 Workflow tips: new_document (or use the open one) → build background → shapes → text → effects → render_preview to
 check your work visually → fix issues → export_document. Use batch to run many operations in one call.`;
 
@@ -78,6 +79,7 @@ function common(l: Layer, a: Json) {
   if (a.blend && BLEND_MODES.includes(a.blend)) l.blend = a.blend;
   if (a.effects) l.effects = a.effects;
   if (a.visible != null) l.visible = !!a.visible;
+  if (a.role !== undefined) l.role = a.role || undefined;
 }
 
 function place(ds: DocState, l: Layer, a: Json) {
@@ -164,7 +166,7 @@ const TOOLS: ToolDef[] = [
       properties: {
         shape: { type: 'string', enum: ['rect', 'ellipse', 'polygon', 'star', 'line'] }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' },
         fill: paintSchema, stroke: paintSchema, stroke_width: { type: 'number' }, dash: { type: 'array', items: { type: 'number' } }, radius: { type: 'number' }, sides: { type: 'number' }, inner_radius: { type: 'number' },
-        rotation: { type: 'number' }, opacity: { type: 'number' }, blend: { type: 'string' }, name: { type: 'string' }, effects: { type: 'object' }, parent_id: { type: 'string', description: 'Group to add into' },
+        rotation: { type: 'number' }, opacity: { type: 'number' }, blend: { type: 'string' }, name: { type: 'string' }, role: { type: 'string', description: 'headline, subhead, body, cta, price, logo, photo, legal, badge, graphic or background' }, effects: { type: 'object' }, parent_id: { type: 'string', description: 'Group to add into' },
       },
     },
     run: (a) => {
@@ -196,7 +198,7 @@ const TOOLS: ToolDef[] = [
       properties: {
         d: { type: 'string' }, fill: paintSchema, stroke: paintSchema, stroke_width: { type: 'number' }, fill_rule: { type: 'string', enum: ['nonzero', 'evenodd'] },
         x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, keep_aspect: { type: 'boolean', description: 'When fitting, keep proportions (default true)' },
-        rotation: { type: 'number' }, opacity: { type: 'number' }, name: { type: 'string' }, effects: { type: 'object' }, parent_id: { type: 'string' },
+        rotation: { type: 'number' }, opacity: { type: 'number' }, name: { type: 'string' }, role: { type: 'string', description: 'headline, subhead, body, cta, price, logo, photo, legal, badge, graphic or background' }, effects: { type: 'object' }, parent_id: { type: 'string' },
       },
     },
     run: (a) => {
@@ -227,7 +229,7 @@ const TOOLS: ToolDef[] = [
         text: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, font_size: { type: 'number' }, font_family: { type: 'string' },
         font_weight: { type: 'number' }, italic: { type: 'boolean' }, color: paintSchema, align: { type: 'string', enum: ['left', 'center', 'right'] },
         line_height: { type: 'number', description: 'Multiplier, default 1.2' }, letter_spacing: { type: 'number' }, stroke: paintSchema, stroke_width: { type: 'number' },
-        rotation: { type: 'number' }, opacity: { type: 'number' }, name: { type: 'string' }, effects: { type: 'object' }, parent_id: { type: 'string' },
+        rotation: { type: 'number' }, opacity: { type: 'number' }, name: { type: 'string' }, role: { type: 'string', description: 'headline, subhead, body, cta, price, logo, photo, legal, badge, graphic or background' }, effects: { type: 'object' }, parent_id: { type: 'string' },
       },
     },
     run: (a) => {
@@ -322,13 +324,14 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'update_layer', description: 'Change any layer properties: x, y, width, height, rotation, opacity, blend, visible, locked, name, fill, stroke, stroke_width, radius, sides, text, font_size, font_family, font_weight, italic, color, align, line_height, letter_spacing, effects, and params (for adjustment layers).',
-    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, rotation: { type: 'number' }, opacity: { type: 'number' }, blend: { type: 'string', enum: BLEND_MODES }, visible: { type: 'boolean' }, locked: { type: 'boolean' }, name: { type: 'string' }, fill: paintSchema, stroke: paintSchema, stroke_width: { type: 'number' }, radius: { type: 'number' }, sides: { type: 'number' }, text: { type: 'string' }, font_size: { type: 'number' }, font_family: { type: 'string' }, font_weight: { type: 'number' }, italic: { type: 'boolean' }, color: paintSchema, align: { type: 'string' }, line_height: { type: 'number' }, letter_spacing: { type: 'number' }, effects: { type: 'object' }, params: { type: 'object' } } },
+    name: 'update_layer', description: 'Change any layer properties: x, y, width, height, rotation, opacity, blend, visible, locked, name, fill, stroke, stroke_width, radius, sides, text, font_size, font_family, font_weight, italic, color, align, line_height, letter_spacing, effects, role (headline, subhead, body, cta, price, logo, photo, legal, badge, graphic, background: tells Brand Training what the layer is), and params (for adjustment layers).',
+    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, x: { type: 'number' }, y: { type: 'number' }, width: { type: 'number' }, height: { type: 'number' }, rotation: { type: 'number' }, opacity: { type: 'number' }, blend: { type: 'string', enum: BLEND_MODES }, visible: { type: 'boolean' }, locked: { type: 'boolean' }, name: { type: 'string' }, fill: paintSchema, stroke: paintSchema, stroke_width: { type: 'number' }, radius: { type: 'number' }, sides: { type: 'number' }, text: { type: 'string' }, font_size: { type: 'number' }, font_family: { type: 'string' }, font_weight: { type: 'number' }, italic: { type: 'boolean' }, color: paintSchema, align: { type: 'string' }, line_height: { type: 'number' }, letter_spacing: { type: 'number' }, effects: { type: 'object' }, params: { type: 'object' }, role: { type: 'string' } } },
     run: (a) => {
       const ds = need(cur());
       const l = getLayer(ds, a.id);
       const p: Json = {};
       for (const k of ['x', 'y', 'rotation', 'opacity', 'blend', 'visible', 'locked', 'name', 'radius', 'sides', 'text', 'italic', 'align', 'effects']) if (a[k] !== undefined) p[k] = a[k];
+      if (a.role !== undefined) l.role = a.role || undefined;
       if (a.params !== undefined && l.type === 'adjust') {
         const fd = filterById(l.filter);
         l.params = fd ? resolveParams(fd, { ...l.params, ...a.params }) : { ...l.params, ...a.params };
@@ -527,8 +530,100 @@ const TOOLS: ToolDef[] = [
       if (!b) throw new Error(a.name ? `Brand "${a.name}" not found (list_brands)` : 'No active brand. Pass a name (list_brands).');
       return {
         name: b.name, active: L.activeBrand.value === b.name, colors: b.colors, fonts: b.fonts, guidelines: b.guidelines, tagline: b.tagline, website: b.website,
-        assets: L.library.value.assets.filter((x) => x.brand === b.name).map((x) => ({ id: x.id, name: x.name, category: L.categoryLabel(x.category), type: x.kind, format: x.ext, tags: x.tags, description: x.description })),
+        assets: L.library.value.assets.filter((x) => x.brand === b.name && !x.training).map((x) => ({ id: x.id, name: x.name, category: L.categoryLabel(x.category), type: x.kind, format: x.ext, tags: x.tags, description: x.description })),
       };
+    },
+  },
+  // Brand Training: learn a brand's design style from its past work, then recreate and check it.
+  {
+    name: 'get_brand_style', description: "The Brand Style Profile learned from a brand's training examples (default: active brand): palette with shares, colors to avoid, light/dark grounds, headline size and hierarchy, fonts per role, margins, empty space, logo and headline placement, CTA/photo usage, formats, a plain-language summary, and the learned layouts (archetypes) usable with recreate_layout. Read this before designing for a brand.",
+    inputSchema: { type: 'object', properties: { brand: { type: 'string' } } },
+    run: async (a) => {
+      const T = await import('../core/training');
+      const st = await T.styleFor(a.brand);
+      return { brand: st.brand, updated: st.updated, ...st.profile };
+    },
+  },
+  {
+    name: 'list_brand_examples', description: "A brand's training library: approved past designs, inspiration (reference only: learn principles, never copy) and avoid examples (don'ts), each with the designer's note and tags. Use get_example to see one.",
+    inputSchema: { type: 'object', properties: { brand: { type: 'string' }, bucket: { type: 'string', enum: ['approved', 'inspiration', 'avoid'] } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      const T = await import('../core/training');
+      await L.refreshLibrary();
+      const b = L.brandByName(a.brand ?? L.activeBrand.value);
+      if (!b) throw new Error(a.brand ? `Brand "${a.brand}" not found` : 'No active brand. Pass a brand name (list_brands).');
+      return { brand: b.name, examples: T.trainingItems(b.name, a.bucket).map((x) => ({ id: x.id, name: x.name, bucket: x.training, format: x.ext, note: x.description, tags: x.tags })) };
+    },
+  },
+  {
+    name: 'find_similar_examples', description: "Training examples of a brand ranked by likeness to the active document (default), to a target size (width/height), and/or a text query matched against names, tags and notes. Use it to pick references before designing.",
+    inputSchema: { type: 'object', properties: { brand: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, query: { type: 'string' }, bucket: { type: 'string', enum: ['approved', 'inspiration', 'avoid'] }, limit: { type: 'number' } } },
+    run: async (a) => {
+      const T = await import('../core/training');
+      const doc = a.width || a.height ? undefined : cur()?.doc;
+      return T.findSimilar(a.brand, { doc, width: a.width, height: a.height, query: a.query, bucket: a.bucket }, Math.min(20, num(a.limit, 5)));
+    },
+  },
+  {
+    name: 'get_example', description: 'See one training example as an image, with its analyzed structure: format, palette and every element with its role (headline, logo, cta...) and box as fractions of the canvas.',
+    inputSchema: { type: 'object', required: ['id'], properties: { id: { type: 'string' }, max_size: { type: 'number' } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      const T = await import('../core/training');
+      const x = L.findAsset(String(a.id));
+      if (!x?.training) throw new Error(`Training example "${a.id}" not found (list_brand_examples)`);
+      const st = await T.styleFor(x.brand);
+      const f = st.facts[x.id];
+      const info = { id: x.id, bucket: x.training, note: x.description, tags: x.tags, ...(f ? { width: f.width, height: f.height, layered: f.layered, palette: f.palette, elements: f.elements } : {}) };
+      return { __image: await L.assetPreviewPNG(x, num(a.max_size, 768)), note: JSON.stringify(info) };
+    },
+  },
+  {
+    name: 'recreate_layout', description: "Start a new document from a layout the brand actually uses, filled with the brand's fonts, colors and logo. Pass layout (an archetype id from get_brand_style or an example id), or just width/height to use the closest learned layout. copy sets text per role, e.g. {headline, subhead, body, cta, price, legal}. Every layer gets a role; replace the photo slot with place_asset, then check with score_brand_fit.",
+    inputSchema: { type: 'object', properties: { brand: { type: 'string' }, layout: { type: 'string' }, width: { type: 'number' }, height: { type: 'number' }, copy: { type: 'object' } } },
+    run: async (a) => {
+      const T = await import('../core/training');
+      return T.recreateLayout(a.brand, { layout: a.layout, width: a.width, height: a.height, copy: a.copy });
+    },
+  },
+  {
+    name: 'score_brand_fit', description: "Score the active document 0-100 against the brand's learned style: brand colors, avoided colors, fonts, headline size, type hierarchy, margins, logo, light/dark ground and empty space. Returns each check and a list of fixes. Aim for 85+ before showing the user.",
+    inputSchema: { type: 'object', properties: { brand: { type: 'string' } } },
+    run: async (a) => {
+      const T = await import('../core/training');
+      return T.scoreDocument(a.brand);
+    },
+  },
+  {
+    name: 'add_training_example', description: "Add to a brand's training library: the active document (default) or an existing library asset (asset id), into bucket approved (designs that represent the brand), inspiration (references) or avoid (don'ts; give the reason in note). Only add approved work when the user approves it.",
+    inputSchema: { type: 'object', required: ['bucket'], properties: { brand: { type: 'string' }, bucket: { type: 'string', enum: ['approved', 'inspiration', 'avoid'] }, asset: { type: 'string' }, note: { type: 'string' } } },
+    run: async (a) => {
+      const L = await import('../core/library');
+      const T = await import('../core/training');
+      const b = L.brandByName(a.brand ?? L.activeBrand.value);
+      if (!b) throw new Error('Pass a brand name (list_brands) or set an active brand.');
+      if (!['approved', 'inspiration', 'avoid'].includes(a.bucket)) throw new Error('bucket must be approved, inspiration or avoid');
+      if (a.asset) {
+        const x = L.findAsset(String(a.asset));
+        if (!x) throw new Error(`Asset "${a.asset}" not found`);
+        await T.addTrainingFiles(b.name, a.bucket, [{ name: x.file, bytes: await L.readAsset(x) }]);
+        const added = T.trainingItems(b.name, a.bucket).sort((p, q) => q.modified - p.modified)[0];
+        if (added && a.note) await L.setAssetInfo(added, { description: String(a.note) });
+        return { added: added?.id, bucket: a.bucket };
+      }
+      need(cur());
+      const added = await T.addCurrentDocument(b.name, a.bucket, a.note);
+      return { added: added?.id, bucket: a.bucket };
+    },
+  },
+  {
+    name: 'retrain_brand', description: "Re-analyze a brand's training examples and rebuild its Brand Style Profile (done automatically when examples change; call after big edits). Returns the summary.",
+    inputSchema: { type: 'object', properties: { brand: { type: 'string' } } },
+    run: async (a) => {
+      const T = await import('../core/training');
+      const st = await T.retrainBrand(a.brand);
+      return { brand: st.brand, examples: st.profile.counts, layouts: st.profile.archetypes.length, summary: st.profile.summary };
     },
   },
   {
@@ -575,7 +670,7 @@ const TOOLS: ToolDef[] = [
       await L.refreshLibrary();
       const q = String(a.query ?? '').toLowerCase();
       const brandQ = a.brand == null ? null : String(a.brand).toLowerCase();
-      const list = L.library.value.assets.filter((x) => (brandQ == null || (brandQ === 'shared' ? !x.brand : (x.brand ?? '').toLowerCase() === brandQ))
+      const list = L.library.value.assets.filter((x) => !x.training && (brandQ == null || (brandQ === 'shared' ? !x.brand : (x.brand ?? '').toLowerCase() === brandQ))
         && (!a.category || L.categoryLabel(x.category).toLowerCase() === String(a.category).toLowerCase() || x.category.toLowerCase() === String(a.category).toLowerCase())
         && (!q || x.name.toLowerCase().includes(q) || x.tags.some((t) => t.toLowerCase().includes(q)) || (x.description ?? '').toLowerCase().includes(q)));
       return {
@@ -841,7 +936,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.6.0' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.7.0' },
         instructions: GUIDE,
       });
     }

@@ -73,6 +73,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 | **Content-aware** | Edit > Content-Aware Fill (PatchMatch inpainting in a background worker), Select > Subject and Select > Sky. All run on your machine with no AI model downloads, so they are estimates rather than Photoshop's cloud ML |
 | **Assets library** | Pick any folder on your computer: each subfolder is a category (Logos, Icons, Photos, Backgrounds, Textures, Illustrations, Templates, Fonts by default). Browse, search by name or tag, click or drag to place, save layers as PNG/SVG/layered assets, keep brand color palettes. Fonts in the folder show up in the Type tool. Everything is plain files plus a `library.json`, so it syncs with Dropbox/Drive/git |
 | **Brands** | Manage any number of brands. Each brand has its own asset categories (Logos, Icons, Photos, Graphics, Templates, Fonts), named colors with roles (primary, secondary, accent, text, background), heading/body/accent fonts with weights, a tagline, website and written guidelines. Set an active brand, apply brand fonts and colors to selected layers in one click. Stored as `Brands/<name>/brand.json` in your Assets folder |
+| **Brand Training** | Teach LucentEdit how each brand designs. Every brand gets a training library: **Approved** past designs, **Inspiration** (references: only layout ideas are learned, never their colors or fonts) and **Avoid** (don'ts, with a note). LucentEdit analyzes them into a Brand Style Profile: palette and its proportions, light or dark grounds, headline size and type hierarchy, fonts per role, margins, empty space, logo and headline placement, and the brand's recurring layouts. Start a new document from a learned layout, filled with the brand's own fonts, colors and logo, and score any design for brand fit (0-100, with fixes). Works per brand, fully offline, no model training: the profile is plain JSON at `Brands/<name>/Training/style.json` |
 | **Fonts** | Every font installed on your computer is available (read directly from the system on Windows, macOS and Linux), plus fonts from your Assets folder and brands, in a searchable picker that previews each typeface |
 | **Automation** | Actions panel: record, play, edit steps, assign F-keys, play on all open documents, saved between sessions |
 | **Masks** | Non-destructive layer masks (reveal/hide all, from selection; paint black to hide, white to reveal; enable, apply, delete) and clipping masks (Ctrl+Alt+G) |
@@ -341,6 +342,7 @@ Use the HTTP URL `http://127.0.0.1:47800/mcp` if the client supports Streamable 
 | **Layers & guides** | `merge_layers` (down, visible, flatten), `set_guides`, `convert_to_smart_object`, `transform_layer` (distort / perspective by corners) |
 | **Content-aware** | `select_subject` (subject or sky), `content_aware_fill` |
 | **Brands** | `list_brands`, `get_brand` (colors, fonts, guidelines, assets), `create_brand`, `update_brand`, `set_active_brand`; `list_fonts` returns every installed font with weights |
+| **Brand Training** | `get_brand_style` (learned profile and layouts), `list_brand_examples`, `find_similar_examples`, `get_example` (image plus analyzed structure), `recreate_layout` (new document from a learned layout with the brand's assets), `score_brand_fit` (0-100 with fixes), `add_training_example`, `retrain_brand` |
 | **Assets library** | `list_assets` (categories, tags, brand palettes, fonts; filter by brand), `get_asset_preview`, `place_asset`, `save_asset`, `manage_assets` (categories, tags, palettes), `set_assets_folder` (the user confirms the change in the app) |
 | **See the result** | `render_preview` (returns a PNG so the agent can look at its own work) |
 | **Files** | `export_document` (png, jpg, webp, svg, psd, lucentedit), `open_file`, `save_document` |
@@ -350,6 +352,7 @@ Use the HTTP URL `http://127.0.0.1:47800/mcp` if the client supports Streamable 
 ### Example prompts
 
 - *"Create an Instagram post for my active brand: use its logo, heading and body fonts, primary and accent colors, and follow its guidelines."*
+- *"Read my active brand's style with get_brand_style, start a 1080x1920 story with recreate_layout for our autumn launch, place a photo from the brand's Photos, and keep fixing it until score_brand_fit is 85 or more."*
 - *"Use my Assets library: put my logo from Logos in the top-left corner, use the colors from my brand palette, and save the finished banner to the Templates category."*
 
 - *"Create a 1080x1080 Instagram post for a coffee shop launch: warm gradient background, a bold headline, a minimal cup icon drawn with paths. Render a preview and refine it until it looks polished, then export PNG to ~/Desktop/launch.png."*
@@ -516,11 +519,14 @@ lucentedit/
 - [x] Content-Aware Fill, Select Subject, Select Sky (on-device, no models)
 - [x] Skew, Distort, Perspective and Warp transforms; Liquify
 - [x] Actions, Smart Objects
+- [x] Brand Training: learn each brand's style from its past designs, recreate its layouts, score brand fit
 - [ ] ML-quality Object Selection and Generative Fill (optional local models)
 - [ ] Smart filters, layer comps, artboards
 - [ ] Adobe Illustrator (`.ai`) import
 - [ ] Plugin API
 - [ ] Signed and notarized builds, auto-update
+
+The full product roadmap (designers, design teams, marketing teams and AI agents) is in [ROADMAP.md](ROADMAP.md).
 
 Have an idea? [Open a feature request](https://github.com/Tanvir-Chowdhury/LucentEdit/issues/new?template=feature_request.md).
 
