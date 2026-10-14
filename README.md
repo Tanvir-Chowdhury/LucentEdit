@@ -19,9 +19,9 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 
 <br />
 
-<img src="docs/hero.png" alt="A social card designed in LucentEdit by an AI agent over MCP" width="900" />
+<img src="docs/screenshots/editor.png" alt="LucentEdit editor with a coffee poster open: layers, properties and rulers" width="960" />
 
-<sub>This banner was designed inside LucentEdit by an AI agent through the built-in MCP server.</sub>
+<sub>A poster built entirely by an AI agent through the built-in MCP server, open in the LucentEdit editor.</sub>
 
 </div>
 
@@ -29,6 +29,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 
 ## Table of contents
 
+- [Screenshots](#screenshots)
 - [Why LucentEdit](#why-lucentedit)
 - [Features](#features)
 - [Install](#install)
@@ -47,6 +48,27 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 - [Roadmap](#roadmap)
 - [Contributing](#contributing)
 - [License](#license)
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/brand-training.png" alt="Brand Training panel: training examples, a 100 brand-fit score and a design recreated from a learned layout" /></td>
+    <td width="50%"><img src="docs/screenshots/menus.png" alt="Photoshop-style Filter menu with the Blur submenu open" /></td>
+  </tr>
+  <tr>
+    <td><b>Brand Training.</b> LucentEdit learns a brand's style from its past designs. This poster was rebuilt from one of the brand's own layouts, and it scores 100 for brand fit.</td>
+    <td><b>Photoshop-style menus and shortcuts.</b> 50+ filters, adjustment layers, Liquify, Warp and Content-Aware Fill, where Photoshop users expect them.</td>
+  </tr>
+  <tr>
+    <td><img src="docs/screenshots/home.png" alt="LucentEdit home screen with document presets" /></td>
+    <td><img src="docs/screenshots/mcp.png" alt="Connect AI Agents dialog with setup for Claude Code, Cursor, VS Code and stdio clients" /></td>
+  </tr>
+  <tr>
+    <td><b>Start in seconds.</b> Presets for every social, video and print size. No account, works offline.</td>
+    <td><b>Connect any AI agent.</b> One command for Claude Code, a config snippet for Cursor, VS Code, Codex and other MCP clients.</td>
+  </tr>
+</table>
 
 ## Why LucentEdit
 

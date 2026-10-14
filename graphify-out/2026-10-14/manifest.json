@@ -10,13 +10,13 @@
     "semantic_hash": ""
   },
   "mcp/package.json": {
-    "mtime": 1791989966.4082253,
-    "ast_hash": "6055e140a6088457c7ebd1494f7f9773",
+    "mtime": 1791993835.0416749,
+    "ast_hash": "9b66132ebd4dff2fd0e3a4ef94110d99",
     "semantic_hash": ""
   },
   "package.json": {
-    "mtime": 1791989966.4077983,
-    "ast_hash": "282e6c8604a25b5181bd8cf4adad9900",
+    "mtime": 1791993835.0410652,
+    "ast_hash": "3e76761183a739ec1c0470aaa32bb432",
     "semantic_hash": ""
   },
   "scripts/install.ps1": {
@@ -55,8 +55,8 @@
     "semantic_hash": ""
   },
   "src-tauri/tauri.conf.json": {
-    "mtime": 1791989966.4080763,
-    "ast_hash": "006a28ef06042280ddf6a58f056019a8",
+    "mtime": 1791993835.041265,
+    "ast_hash": "eabb811f407838775ec02db2b27e120d",
     "semantic_hash": ""
   },
   "src/core/filters.ts": {
@@ -70,8 +70,8 @@
     "semantic_hash": ""
   },
   "src/core/ops.ts": {
-    "mtime": 1791894797.5993853,
-    "ast_hash": "00cc775dc24f5d1274f35fd10a9cd237",
+    "mtime": 1791993326.6890595,
+    "ast_hash": "5ec2468513d693c62e2895559b9ebcd1",
     "semantic_hash": ""
   },
   "src/core/paths.ts": {
@@ -95,8 +95,8 @@
     "semantic_hash": ""
   },
   "src/core/types.ts": {
-    "mtime": 1791894774.979837,
-    "ast_hash": "15965027f2d6ab278bd57cf769b96d95",
+    "mtime": 1791993326.6887858,
+    "ast_hash": "643c8c9b0a179469c5227004d94dd278",
     "semantic_hash": ""
   },
   "src/core/util.ts": {
@@ -115,8 +115,8 @@
     "semantic_hash": ""
   },
   "src/mcp/server.ts": {
-    "mtime": 1791989996.9109964,
-    "ast_hash": "612f7427aacbe47f4a8fb4b95710c112",
+    "mtime": 1791993835.0446744,
+    "ast_hash": "4eb5603e4009cb8c902512733f724276",
     "semantic_hash": ""
   },
   "src/tools/index.ts": {
@@ -175,8 +175,8 @@
     "semantic_hash": ""
   },
   "src/ui/dialogs.tsx": {
-    "mtime": 1791989966.4109132,
-    "ast_hash": "df2ded4a9ef9f60697a41dea91b9d6d2",
+    "mtime": 1791993835.0441542,
+    "ast_hash": "40918e8fc992479d88c91d8e14833d81",
     "semantic_hash": ""
   },
   "src/ui/icons.tsx": {
@@ -230,8 +230,8 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1791990165.6587424,
-    "ast_hash": "6f7d13e5c012edd3954241cb2fb80ca3",
+    "mtime": 1791993782.690342,
+    "ast_hash": "aaea2d8768a3a8685823816edffd7cd8",
     "semantic_hash": ""
   },
   "index.html": {
@@ -495,8 +495,8 @@
     "semantic_hash": ""
   },
   "mcp/lucentedit-mcp.mjs": {
-    "mtime": 1791989966.4130335,
-    "ast_hash": "8187d02de0f7b691418a3480992003f8",
+    "mtime": 1791993835.0457165,
+    "ast_hash": "5ac7195c7a39e2aba29ac3ec314a6586",
     "semantic_hash": ""
   },
   "src/core/adjust.ts": {
@@ -620,13 +620,13 @@
     "semantic_hash": ""
   },
   "src/core/library.ts": {
-    "mtime": 1791989674.595063,
-    "ast_hash": "ef08cc9075ba60927cfda329f59b0d64",
+    "mtime": 1791993309.464833,
+    "ast_hash": "ed38113ff59eb6ae17d1070d60e0c4be",
     "semantic_hash": ""
   },
   "src/ui/AssetsPanel.tsx": {
-    "mtime": 1791989702.5974054,
-    "ast_hash": "bdd2c4fcd29651284acb32dcc21ec2ef",
+    "mtime": 1791993454.7070258,
+    "ast_hash": "d0b06f5ef4f1b05ff20b654ba4022c3f",
     "semantic_hash": ""
   },
   "src/core/fonts.ts": {
@@ -635,13 +635,38 @@
     "semantic_hash": ""
   },
   "src/ui/BrandsPanel.tsx": {
-    "mtime": 1791989711.5175169,
-    "ast_hash": "50a25d29fb5c4c1814d2f09298df3de0",
+    "mtime": 1791993495.708562,
+    "ast_hash": "0a655f4023d384efb7072fbabe7ec727",
     "semantic_hash": ""
   },
   "src/ui/FontPicker.tsx": {
     "mtime": 1791989702.5965414,
     "ast_hash": "9c8075587a727aae21f8ef6652b42f82",
+    "semantic_hash": ""
+  },
+  "src/core/training-analyze.ts": {
+    "mtime": 1791993664.464877,
+    "ast_hash": "82c6faf00dc330d4b37ea9f5a4b2169d",
+    "semantic_hash": ""
+  },
+  "src/core/training.check.ts": {
+    "mtime": 1791993288.8775868,
+    "ast_hash": "dbf6458dee5598d10b8e44d567f40661",
+    "semantic_hash": ""
+  },
+  "src/core/training.ts": {
+    "mtime": 1791993682.283207,
+    "ast_hash": "45032b523871285a10f2bec43a7203b4",
+    "semantic_hash": ""
+  },
+  "src/ui/TrainingPanel.tsx": {
+    "mtime": 1791993748.7551968,
+    "ast_hash": "2e6d9e5b49fbb40c5c522999fe503929",
+    "semantic_hash": ""
+  },
+  "ROADMAP.md": {
+    "mtime": 1791993816.9995992,
+    "ast_hash": "65fa679229c3bb9a425b4f241bf8c36e",
     "semantic_hash": ""
   }
 }

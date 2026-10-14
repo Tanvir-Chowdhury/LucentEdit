@@ -1,12 +1,12 @@
 # Graph Report - photoAgent  (2026-10-14)
 
 ## Corpus Check
-- 75 files · ~136,508 words
+- 80 files · ~147,486 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1347 nodes · 3744 edges · 62 communities (57 shown, 5 thin omitted)
-- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 53 edges (avg confidence: 0.58)
+- 1455 nodes · 4616 edges · 56 communities (53 shown, 3 thin omitted)
+- Extraction: 99% EXTRACTED · 1% INFERRED · 0% AMBIGUOUS · INFERRED: 61 edges (avg confidence: 0.59)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
@@ -47,51 +47,45 @@
 - flatten
 - Tool
 - Kind
-- infoPanels.tsx
 - install.ps1
 - mcp-smoke-test.mjs
 - lucentedit-mcp.mjs
-- filters-algo.check.ts
 - CLAUDE.md
 - pct
 - check
 - colorToRGBA
 - adjust.ts
-- flatten
 - filters.ts
 - contentaware.ts
 - walk
-- clamp
 - filters-algo.check.ts
 - controls.tsx
 - findLayerIn
 - runDab
 - infoPanels.tsx
 - warp.ts
-- gridFromQuad
-- findLayerIn
 - cloneLayers
 - render
 
 ## God Nodes (most connected - your core abstractions)
-1. `cur()` - 126 edges
-2. `commit()` - 86 edges
-3. `touch()` - 82 edges
-4. `ctx2d()` - 66 edges
-5. `toast` - 60 edges
-6. `makeCanvas()` - 53 edges
+1. `cur()` - 131 edges
+2. `commit()` - 90 edges
+3. `ctx2d()` - 89 edges
+4. `touch()` - 83 edges
+5. `makeCanvas()` - 73 edges
+6. `toast` - 62 edges
 7. `activeLayer()` - 45 edges
-8. `flatten()` - 30 edges
-9. `selectedLayers()` - 30 edges
-10. `refreshLibrary()` - 25 edges
+8. `flatten()` - 34 edges
+9. `addLayer()` - 31 edges
+10. `selectedLayers()` - 31 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `ActionsPanel()` --indirect_call--> `on()`  [INFERRED]
   src/ui/ActionsPanel.tsx → src/core/filters-algo.ts
-- `onPaste()` --indirect_call--> `fileToOpened()`  [INFERRED]
-  src/ui/App.tsx → src/core/io.ts
-- `Viewport()` --indirect_call--> `fileToOpened()`  [INFERRED]
-  src/ui/Viewport.tsx → src/core/io.ts
+- `FilterDialog()` --indirect_call--> `on()`  [INFERRED]
+  src/ui/dialogs.tsx → src/core/filters-algo.ts
+- `rgbOf()` --calls--> `parseColor()`  [EXTRACTED]
+  src/core/filters-algo.ts → src/core/util.ts
 - `MenuBar()` --indirect_call--> `esc()`  [INFERRED]
   src/ui/chrome.tsx → src/core/io.ts
 - `previewDataURL()` --calls--> `flatten()`  [EXTRACTED]
@@ -100,27 +94,27 @@
 ## Import Cycles
 - None detected.
 
-## Communities (62 total, 5 thin omitted)
+## Communities (56 total, 3 thin omitted)
 
 ### Community 0 - "Contributing to Lucent"
-Cohesion: 0.06
-Nodes (31): Before opening a pull request, Contributing to LucentEdit, Getting started, Guidelines, How contributions work, Reporting bugs, Build and run, Build from source (+23 more)
+Cohesion: 0.04
+Nodes (45): Before opening a pull request, Contributing to LucentEdit, Getting started, Guidelines, How contributions work, Reporting bugs, Build and run, Build from source (+37 more)
 
 ### Community 1 - "commands.ts"
-Cohesion: 0.06
-Nodes (69): baseName(), buildSvg(), deserializeDoc(), docFromFile(), elementToPathData(), esc(), ExportFormat, extOf() (+61 more)
+Cohesion: 0.10
+Nodes (31): readPath(), groupSelected(), layerSummary(), removeLayers(), toPaint(), toStroke(), ungroup(), docs (+23 more)
 
 ### Community 2 - "io.ts"
-Cohesion: 0.11
-Nodes (12): Layer, corners(), hslToRgb(), hx(), imageToCanvas(), layerMatrix(), loadImage(), normHex() (+4 more)
+Cohesion: 0.16
+Nodes (12): layerBoundsPx(), Doc, corners(), dataURLToBytes(), downloadBlob(), hslToRgb(), hx(), layerMatrix() (+4 more)
 
 ### Community 3 - "retouch.tsx"
 Cohesion: 0.04
-Nodes (36): historyShift, bgEraserKind, bgEraserOpts, bgEraserTool, blurKind, blurTool, burnTool, cloneOpts (+28 more)
+Nodes (35): bgEraserKind, bgEraserOpts, bgEraserTool, blurKind, blurTool, burnTool, cloneOpts, cloneStampTool (+27 more)
 
 ### Community 4 - "server.ts"
-Cohesion: 0.07
-Nodes (57): actions, assert, g, steps, confirmStop(), deleteAction(), deleteStep(), dialogClosed() (+49 more)
+Cohesion: 0.06
+Nodes (65): actionForKey(), actions, assert, g, steps, confirmStop(), deleteAction(), deleteStep() (+57 more)
 
 ### Community 5 - "package.json"
 Cohesion: 0.05
@@ -132,35 +126,35 @@ Nodes (39): icons/128x128@2x.png, icons/128x128.png, icons/32x32.png, icons/icon
 
 ### Community 7 - "chrome.tsx"
 Cohesion: 0.13
-Nodes (20): textOpts, commitText(), filterMenu(), flyout, FONTS, hideTip(), MenuBar(), MenuEntry (+12 more)
+Nodes (23): quickMask, groupTools(), CUSTOM_SHAPES, filterMenu(), flyout, FONTS, FontSelect(), hideTip() (+15 more)
 
 ### Community 8 - "util.ts"
-Cohesion: 0.12
-Nodes (23): filterById(), FILTERS, exportBytes(), saveAs(), cropDoc(), flipContent(), flipLayers(), MaskMode (+15 more)
+Cohesion: 0.16
+Nodes (25): baseName(), buildSvg(), deserializeDoc(), docFromFile(), elementToPathData(), esc(), exportBytes(), extOf() (+17 more)
 
 ### Community 9 - "panels.tsx"
 Cohesion: 0.05
-Nodes (43): blurImg(), blurRGBA(), boxPlane(), boxSumEnd(), cbWeights(), c, grouped, id (+35 more)
+Nodes (47): blurImg(), blurRGBA(), boxPlane(), boxSumEnd(), cbWeights(), c, grouped, id (+39 more)
 
 ### Community 10 - "extra.tsx"
 Cohesion: 0.11
-Nodes (20): toPathProps(), addAnchorTool, anchorsOverlay(), convertPointTool, deleteAnchorTool, EXTRA_TOOLS, free, freeformTool (+12 more)
+Nodes (17): addAnchorTool, anchorsOverlay(), convertPointTool, deleteAnchorTool, EXTRA_TOOLS, free, freeformTool, pathTarget() (+9 more)
 
 ### Community 11 - "dialogs.tsx"
-Cohesion: 0.12
-Nodes (6): mcpStatus, Dialogs(), FeatherDialog(), PresetCard(), PRESETS, SizeDialog()
+Cohesion: 0.10
+Nodes (15): ExportFormat, mcpStatus, TOOLS, Welcome(), MenuItems(), lastFilter, newDocument(), prettyKeys() (+7 more)
 
 ### Community 12 - "lib.rs"
 Cohesion: 0.15
 Nodes (33): AppHandle, Cursor, Header, Option, PathBuf, Request, Response, Result (+25 more)
 
 ### Community 14 - "cur"
-Cohesion: 0.11
-Nodes (24): MaskMeta, Rect, boundsOf(), Pt, Quad, applyTransform(), EDGES, H_PARTNER (+16 more)
+Cohesion: 0.10
+Nodes (25): MaskMeta, Rect, identityGrid(), presetGrid(), Pt, Quad, cancelTransform(), EDGES (+17 more)
 
 ### Community 15 - "select2.tsx"
-Cohesion: 0.10
-Nodes (23): deselect(), SelMode, edgePath(), floodWindow(), gradientMagnitude(), luma(), RangeSpec, slideMax() (+15 more)
+Cohesion: 0.07
+Nodes (23): deselect(), edgePath(), floodWindow(), snapToEdge(), finish(), line(), lineMarquee(), magAnchor() (+15 more)
 
 ### Community 16 - "mcp/package.json"
 Cohesion: 0.09
@@ -175,56 +169,56 @@ Cohesion: 0.10
 Nodes (19): DOM, DOM.Iterable, ES2022, src, vite/client, compilerOptions, isolatedModules, jsx (+11 more)
 
 ### Community 19 - "index.ts"
-Cohesion: 0.11
-Nodes (17): marquee, wand, drawPill(), line(), ants(), cancelCrop(), cropTool, lassoTool (+9 more)
+Cohesion: 0.07
+Nodes (31): marquee, wand, ellipseMarquee, GROUP_ORDER, groupCurrent, rectMarquee, ShapeKind, shapeVariant() (+23 more)
 
 ### Community 20 - "touch"
-Cohesion: 0.18
-Nodes (18): activeIndex, bucket, curDoc(), cursorPos, DialogState, interaction, needsFit, paint (+10 more)
+Cohesion: 0.14
+Nodes (25): fileToOpened(), OpenedFile, pickFiles(), activeIndex, interaction, needsFit, paint, tick (+17 more)
 
 ### Community 21 - "store.ts"
-Cohesion: 0.11
-Nodes (24): canReselect(), colorRange(), loadSelection(), rangeSpec(), reselect(), saveSelection(), selectAll(), selectLayerPixels() (+16 more)
+Cohesion: 0.05
+Nodes (87): Asset, Brand, readAsset(), setAssetInfo(), trainingPath(), newText(), addCurrentDocument(), addTrainingFiles() (+79 more)
 
 ### Community 22 - "select.ts"
-Cohesion: 0.09
-Nodes (41): addLayer(), addMask(), deleteSelected(), duplicateSelected(), commit(), cur(), jumpTo(), redo() (+33 more)
+Cohesion: 0.10
+Nodes (40): saveAs(), applyMask(), cropDoc(), deleteSelected(), MaskMode, rasterize(), reorder(), setClip() (+32 more)
 
 ### Community 23 - "App.tsx"
-Cohesion: 0.10
-Nodes (21): gradientOpts, ToolId, ellipseMarquee, GROUP_ORDER, groupCurrent, handTool, rectMarquee, setTool() (+13 more)
+Cohesion: 0.20
+Nodes (23): applyStroke(), composite(), drawContent(), drawLayer(), drawLayers(), drawShadowOnly(), drawShape(), drawText() (+15 more)
 
 ### Community 24 - "move.ts"
-Cohesion: 0.17
-Nodes (14): applied, boxMatrix(), drawTransformBox(), guides, handlePoints(), hitHandle(), HP, Mode (+6 more)
+Cohesion: 0.19
+Nodes (13): viewOpts, Layer, applied, boxMatrix(), drawTransformBox(), guides, handlePoints(), hitHandle() (+5 more)
 
 ### Community 25 - "permissions"
 Cohesion: 0.15
 Nodes (12): core:default, core:window:allow-destroy, core:window:allow-set-title, dialog:allow-open, dialog:allow-save, dialog:default, main, description (+4 more)
 
 ### Community 26 - "selectops.ts"
-Cohesion: 0.07
-Nodes (84): tauriInvoke(), writePath(), activeBrand, Asset, assetPath(), assetPreviewPNG(), assetThumb(), Brand (+76 more)
+Cohesion: 0.06
+Nodes (87): FALLBACK, FontFamily, fontWeights(), GENERIC_FONTS, loadSystemFonts(), systemFonts, systemFontsState, tauriInvoke() (+79 more)
 
 ### Community 27 - "vector.ts"
-Cohesion: 0.13
-Nodes (23): arcToCubics(), bezierExtents(), Cubic, mapPaths(), node(), normalizePaths(), parseSvgPath(), pathBounds() (+15 more)
+Cohesion: 0.18
+Nodes (21): layerAt(), newPath(), toPathProps(), arcToCubics(), bezierExtents(), Cubic, mapPaths(), node() (+13 more)
 
 ### Community 28 - "retouch-px.ts"
 Cohesion: 0.27
-Nodes (10): blurred(), box1(), inpaint(), luma(), mix(), over(), pushPull(), Px (+2 more)
+Nodes (9): blurred(), box1(), inpaint(), luma(), mix(), over(), pushPull(), Px (+1 more)
 
 ### Community 29 - "flatten"
-Cohesion: 0.17
-Nodes (18): maskTarget, FontSelect(), anchorRef, Appearance(), BLEND_LABEL(), BOTTOM_TABS, DocProps(), done() (+10 more)
+Cohesion: 0.14
+Nodes (28): commit(), selectedLayers(), applyBrandFonts(), commitText(), OptionsBar(), updateText(), cmd(), rotateLayers() (+20 more)
+
+### Community 30 - "Tool"
+Cohesion: 0.33
+Nodes (7): editSmartContents(), openDocState(), restore(), snapshotOf(), syncSmartParent(), cloneLayers(), restoreStart()
 
 ### Community 31 - "Kind"
-Cohesion: 0.20
-Nodes (5): Kind, runDab(), smooth(), strokeTo(), PEvent
-
-### Community 32 - "infoPanels.tsx"
-Cohesion: 0.18
-Nodes (21): alphaCanvas(), boxBlurAlpha(), ColorRangeTarget, drawQuickMaskOverlay(), featherSelection(), flatData(), grow(), lastMask (+13 more)
+Cohesion: 0.17
+Nodes (9): DocState, RasterLayer, Stroke, Kind, runDab(), smooth(), Stroke, strokeTo() (+1 more)
 
 ### Community 33 - "install.ps1"
 Cohesion: 0.48
@@ -238,10 +232,6 @@ Nodes (4): checks, out, rpc(), tool()
 Cohesion: 0.60
 Nodes (4): chain, findApp(), forward(), out()
 
-### Community 36 - "filters-algo.check.ts"
-Cohesion: 0.12
-Nodes (14): FALLBACK, FontFamily, GENERIC_FONTS, loadSystemFonts(), systemFonts, systemFontsState, registerTools(), RETOUCH_TOOLS (+6 more)
-
 ### Community 37 - "CLAUDE.md"
 Cohesion: 0.50
 Nodes (3): graphify, Project: LucentEdit, Skills (use automatically, no need to be asked)
@@ -251,84 +241,72 @@ Cohesion: 0.50
 Nodes (4): BrushSliders(), FocusOptions(), pct(), ToneOptions()
 
 ### Community 46 - "adjust.ts"
-Cohesion: 0.40
-Nodes (10): align(), distribute(), moveLayer(), setProps(), bounds(), refreshGroups(), unionRects(), flipSelected() (+2 more)
-
-### Community 47 - "flatten"
-Cohesion: 0.19
-Nodes (17): maskForLayer(), pixelMatrix(), quickMaskStandIn(), toggleQuickMask(), DocState, RasterLayer, cloneCanvas(), parseColor() (+9 more)
+Cohesion: 0.16
+Nodes (29): placeAsset(), align(), AlignMode, base(), convertToSmart(), distribute(), fitAdjustments(), flipContent() (+21 more)
 
 ### Community 48 - "filters.ts"
-Cohesion: 0.13
-Nodes (18): AdjustLayer, Base, BlendMode, Doc, Effects, GlowFx, Gradient, GradientStop (+10 more)
+Cohesion: 0.17
+Nodes (15): AdjustLayer, Base, Effects, GlowFx, GradientStop, GroupLayer, LayerMask, ShadowFx (+7 more)
 
 ### Community 49 - "contentaware.ts"
 Cohesion: 0.09
 Nodes (36): adaptColor(), CaJob, diskImage(), noise(), cleanMask(), components(), contentAwareFill(), dilateBin() (+28 more)
 
 ### Community 50 - "walk"
-Cohesion: 0.10
-Nodes (23): applyMask(), rasterize(), setClip(), closeDoc(), select(), touch(), BLEND_MODES, resetRotation() (+15 more)
-
-### Community 51 - "clamp"
-Cohesion: 0.24
-Nodes (12): ToolFlyout(), close(), CONTENT_AWARE_COMMANDS, ContentAwareDialogs(), contentAwareFill(), FillDialog(), FillOpts, progress (+4 more)
+Cohesion: 0.31
+Nodes (11): duplicateSelected(), moveInto(), select(), containerOf(), duplicateLayer(), walk(), duplicateLayerOp(), paste() (+3 more)
 
 ### Community 52 - "filters-algo.check.ts"
 Cohesion: 0.13
-Nodes (16): assert, b, dst, f, g, H, img, m (+8 more)
+Nodes (19): applyH(), a, assert, b, dst, f, g, H (+11 more)
 
 ### Community 53 - "controls.tsx"
-Cohesion: 0.18
-Nodes (9): ColorPickerPopover(), evalNum(), NumField(), PaintEditor(), PickerReq, PRESETS, recent, Seg() (+1 more)
+Cohesion: 0.15
+Nodes (13): Gradient, Paint, hsvToRgb(), rgbToHsv(), ColorPickerPopover(), evalNum(), NumField(), PaintEditor() (+5 more)
 
 ### Community 54 - "findLayerIn"
-Cohesion: 0.19
-Nodes (14): actionForKey(), brush, toasts, useTick(), App(), isTyping(), onKeyDown(), onKeyUp() (+6 more)
+Cohesion: 0.15
+Nodes (18): ToolId, setTool(), toolById(), toolShortcut(), beginTextEdit(), ActionDialogs(), App(), isTyping() (+10 more)
 
 ### Community 55 - "runDab"
-Cohesion: 0.16
-Nodes (35): FilterDef, applyFilter(), filteredCopy(), editablePixels(), flattenImage(), layerAt(), mergeDown(), newRaster() (+27 more)
+Cohesion: 0.06
+Nodes (112): autoSampleRect(), psdMaskIn(), writePsdBytes(), assetPreviewPNG(), assetThumb(), downscaled(), editablePixels(), flattenImage() (+104 more)
 
 ### Community 56 - "infoPanels.tsx"
-Cohesion: 0.22
-Nodes (8): bg, fg, samplers, viewportSize, hex(), InfoPanel(), previewCache, SWATCHES
+Cohesion: 0.10
+Nodes (21): bg, brush, bucket, curDoc(), cursorPos, DialogState, gradientOpts, historyShift (+13 more)
 
 ### Community 57 - "warp.ts"
-Cohesion: 0.27
-Nodes (9): Field, liquifyDab(), LiquifyKind, liquifyRender(), newField(), sampleField(), Liquify(), Setup (+1 more)
-
-### Community 58 - "gridFromQuad"
-Cohesion: 0.29
-Nodes (8): applyH(), a, gridFromQuad(), homography(), quadMesh(), solve8(), setTransformMode(), startTransform()
+Cohesion: 0.16
+Nodes (16): Field, Img, liquifyDab(), LiquifyKind, liquifyRender(), Mat3, newField(), sampleField() (+8 more)
 
 ### Community 62 - "cloneLayers"
-Cohesion: 0.12
-Nodes (39): newAdjustment(), AlignMode, base(), convertToSmart(), editSmartContents(), fitAdjustments(), groupSelected(), layerSummary() (+31 more)
+Cohesion: 0.13
+Nodes (20): newAdjustment(), filterById(), FILTERS, addLayer(), addMask(), createDoc(), uid(), finishPen() (+12 more)
 
 ### Community 63 - "render"
-Cohesion: 0.24
-Nodes (12): bern(), bezierPatch(), drawMesh(), Img, Mat3, patchMesh(), renderQuad(), renderWarp() (+4 more)
+Cohesion: 0.25
+Nodes (11): bern(), bezierPatch(), boundsOf(), drawMesh(), patchMesh(), renderQuad(), renderWarp(), toOut() (+3 more)
 
 ## Knowledge Gaps
-- **306 isolated node(s):** `How contributions work`, `Getting started`, `Before opening a pull request`, `Guidelines`, `Reporting bugs` (+301 more)
+- **324 isolated node(s):** `chain`, `name`, `version`, `description`, `type` (+319 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **5 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **3 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `cur()` connect `select.ts` to `commands.ts`, `io.ts`, `retouch.tsx`, `server.ts`, `chrome.tsx`, `util.ts`, `extra.tsx`, `dialogs.tsx`, `cur`, `select2.tsx`, `index.ts`, `touch`, `store.ts`, `App.tsx`, `move.ts`, `selectops.ts`, `vector.ts`, `flatten`, `infoPanels.tsx`, `adjust.ts`, `flatten`, `walk`, `clamp`, `findLayerIn`, `runDab`, `infoPanels.tsx`, `warp.ts`, `gridFromQuad`, `cloneLayers`?**
-  _High betweenness centrality (0.087) - this node is a cross-community bridge._
-- **Why does `touch()` connect `walk` to `commands.ts`, `io.ts`, `retouch.tsx`, `server.ts`, `chrome.tsx`, `util.ts`, `extra.tsx`, `dialogs.tsx`, `cur`, `select2.tsx`, `index.ts`, `touch`, `store.ts`, `select.ts`, `App.tsx`, `move.ts`, `selectops.ts`, `vector.ts`, `flatten`, `Kind`, `infoPanels.tsx`, `adjust.ts`, `flatten`, `findLayerIn`, `runDab`, `infoPanels.tsx`, `gridFromQuad`, `cloneLayers`?**
-  _High betweenness centrality (0.053) - this node is a cross-community bridge._
-- **Why does `commit()` connect `select.ts` to `commands.ts`, `retouch.tsx`, `server.ts`, `chrome.tsx`, `util.ts`, `extra.tsx`, `dialogs.tsx`, `cur`, `touch`, `move.ts`, `selectops.ts`, `vector.ts`, `flatten`, `adjust.ts`, `flatten`, `walk`, `clamp`, `runDab`, `warp.ts`, `cloneLayers`?**
-  _High betweenness centrality (0.038) - this node is a cross-community bridge._
-- **What connects `How contributions work`, `Getting started`, `Before opening a pull request` to the rest of the system?**
-  _306 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Why does `cur()` connect `select.ts` to `commands.ts`, `retouch.tsx`, `server.ts`, `chrome.tsx`, `panels.tsx`, `extra.tsx`, `dialogs.tsx`, `cur`, `select2.tsx`, `index.ts`, `touch`, `store.ts`, `move.ts`, `selectops.ts`, `vector.ts`, `flatten`, `Tool`, `adjust.ts`, `walk`, `findLayerIn`, `runDab`, `infoPanels.tsx`, `warp.ts`, `cloneLayers`?**
+  _High betweenness centrality (0.060) - this node is a cross-community bridge._
+- **Why does `commit()` connect `flatten` to `commands.ts`, `retouch.tsx`, `server.ts`, `chrome.tsx`, `panels.tsx`, `extra.tsx`, `dialogs.tsx`, `cur`, `touch`, `store.ts`, `select.ts`, `move.ts`, `selectops.ts`, `vector.ts`, `Tool`, `adjust.ts`, `walk`, `findLayerIn`, `runDab`, `infoPanels.tsx`, `warp.ts`, `cloneLayers`, `render`?**
+  _High betweenness centrality (0.030) - this node is a cross-community bridge._
+- **Why does `ctx2d()` connect `runDab` to `commands.ts`, `io.ts`, `retouch.tsx`, `util.ts`, `panels.tsx`, `extra.tsx`, `adjust.ts`, `select2.tsx`, `cur`, `filters-algo.check.ts`, `store.ts`, `select.ts`, `App.tsx`, `infoPanels.tsx`, `warp.ts`, `selectops.ts`, `vector.ts`, `cloneLayers`?**
+  _High betweenness centrality (0.023) - this node is a cross-community bridge._
+- **What connects `chain`, `name`, `version` to the rest of the system?**
+  _324 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Contributing to Lucent` be split into smaller, more focused modules?**
-  _Cohesion score 0.06060606060606061 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.041666666666666664 - nodes in this community are weakly interconnected._
 - **Should `commands.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.05502392344497608 - nodes in this community are weakly interconnected._
-- **Should `io.ts` be split into smaller, more focused modules?**
-  _Cohesion score 0.11428571428571428 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10317460317460317 - nodes in this community are weakly interconnected._
+- **Should `retouch.tsx` be split into smaller, more focused modules?**
+  _Cohesion score 0.0425531914893617 - nodes in this community are weakly interconnected._
