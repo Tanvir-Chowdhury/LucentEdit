@@ -100,27 +100,28 @@ function Welcome() {
   return (
     <div class="welcome">
       <div class="welcome-inner">
-        <div class="hero">
+        <header class="hero">
           <img src="/logo.svg" alt="" />
           <div>
-            <h1>Welcome to <span>LucentEdit</span></h1>
-            <p>Photo editing and vector design in one fast, free app, ready for AI agents.</p>
+            <h1>LucentEdit</h1>
+            <p>Photo editing and vector design. Free, offline, and ready for AI agents.</p>
           </div>
-        </div>
+        </header>
         <div class="welcome-actions">
-          <button class="btn primary" onClick={() => (dialog.value = { kind: 'new' })}><Icon name="plus" /> New document</button>
-          <button class="btn" onClick={() => openFiles()}><Icon name="folderOpen" /> Open…</button>
-          <button class="btn ghost" onClick={() => run('mcp')}><Icon name="plug" /> Connect an AI agent</button>
+          <button class="btn primary" onClick={() => (dialog.value = { kind: 'new' })}><Icon name="plus" size={14} /> New document</button>
+          <button class="btn" onClick={() => openFiles()}><Icon name="folderOpen" size={14} /> Open…</button>
+          <span class="spacer" />
+          <button class="btn ghost" onClick={() => run('mcp')}><Icon name="plug" size={14} /> Connect an AI agent</button>
         </div>
-        <h3>Start from a preset</h3>
+        <h3>New from preset</h3>
         <div class="presets">
           {PRESETS.slice(0, 10).map((p) => <PresetCard p={p} onClick={() => newDocument(p.w, p.h, p.name)} />)}
         </div>
-        <div class="tips">
-          <div class="tip-card"><b><Icon name="keyboard" size={15} /> Photoshop shortcuts</b>V, M, L, B, T, P, U, Ctrl+T, Ctrl+J and the rest work the way you expect. Press <kbd>Ctrl</kbd>+<kbd>Alt</kbd>+<kbd>Shift</kbd>+<kbd>K</kbd> for the full list.</div>
-          <div class="tip-card"><b><Icon name="file" size={15} /> Opens PSD & SVG</b>Bring your Photoshop layers and Illustrator SVGs. Export back to PSD, SVG, PNG, JPG and WebP.</div>
-          <div class="tip-card"><b><Icon name="sparkles" size={15} /> Design with AI</b>Claude Code, Cursor, Codex and other agents can build and edit designs here through MCP.</div>
-        </div>
+        <ul class="hints">
+          <li><Icon name="keyboard" size={14} /><span>Photoshop shortcuts work as you expect. <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>Shift</kbd> <kbd>K</kbd> lists them all.</span></li>
+          <li><Icon name="file" size={14} /><span>Opens PSD and SVG with layers. Exports PSD, SVG, PNG, JPG and WebP.</span></li>
+          <li><Icon name="plug" size={14} /><span>Claude Code, Cursor, Codex and other agents can design here through MCP.</span></li>
+        </ul>
       </div>
     </div>
   );
@@ -131,7 +132,7 @@ function Toasts() {
     <div class="toasts">
       {toasts.value.map((t) => (
         <div class={`toast ${t.kind}`} key={t.id}>
-          <Icon name={t.kind === 'error' ? 'info' : t.kind === 'success' ? 'check' : 'sparkles'} size={14} /> {t.text}
+          <Icon name={t.kind === 'error' ? 'info' : t.kind === 'success' ? 'check' : 'info'} size={14} /> {t.text}
         </div>
       ))}
     </div>

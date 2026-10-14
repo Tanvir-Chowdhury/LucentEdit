@@ -5,7 +5,6 @@
 export type Step = (
   | { kind: 'command'; id: string }
   | { kind: 'filter'; id: string; params: Record<string, any> }
-  | { kind: 'mcp'; tool: string; args: any }
   | { kind: 'stop'; message: string }
 ) & { enabled?: boolean };
 
@@ -44,8 +43,10 @@ export function parseActions(text: string | null): Action[] | null {
   try {
     const v = JSON.parse(text);
     if (!Array.isArray(v)) return null;
+    // Only known step kinds survive, so an imported file can't smuggle in anything else.
+    const KINDS = ['command', 'filter', 'stop'];
     return v.filter((a) => a && typeof a.id === 'string' && typeof a.name === 'string' && Array.isArray(a.steps))
-      .map((a) => ({ ...a, set: typeof a.set === 'string' ? a.set : 'Default Actions' }));
+      .map((a) => ({ ...a, set: typeof a.set === 'string' ? a.set : 'Default Actions', steps: a.steps.filter((s: any) => s && KINDS.includes(s.kind)) }));
   } catch { return null; }
 }
 

@@ -11,9 +11,29 @@ export const renderHooks = {
 };
 
 export function fontString(l: Pick<TextLayer, 'italic' | 'weight' | 'size' | 'family'>) {
-  const fam = /[\s,]/.test(l.family) && !/["']/.test(l.family) && !l.family.includes(',') ? `"${l.family}"` : l.family;
-  return `${l.italic ? 'italic ' : ''}${l.weight} ${l.size}px ${fam}, sans-serif`;
+  return `${l.italic ? 'italic ' : ''}${l.weight} ${l.size}px ${cssFamily(l.family)}, sans-serif`;
 }
+
+/** Smart Object contents rendered once at native size. Edits replace `content`, so the
+ *  object itself is the cache key. */
+let smartCache = new WeakMap<object, HTMLCanvasElement>();
+// Text inside may have been drawn with a fallback font: re-render once real fonts arrive.
+document.fonts?.addEventListener('loadingdone', () => { smartCache = new WeakMap(); });
+type SmartContent = Extract<Layer, { type: 'smart' }>['content'];
+function smartPixels(content: SmartContent) {
+  let c = smartCache.get(content);
+  if (!c) {
+    c = makeCanvas(Math.max(1, content.width), Math.max(1, content.height));
+    drawLayers(ctx2d(c), content.layers);
+    smartCache.set(content, c);
+  }
+  return c;
+}
+
+/** Always quoted (names like "Font Awesome 6" or digits break the CSS font shorthand), except
+ *  CSS generic families, which must stay bare. */
+const GENERIC = new Set(['serif', 'sans-serif', 'monospace', 'cursive', 'fantasy', 'system-ui', 'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded', 'emoji', 'math']);
+export const cssFamily = (f: string) => (GENERIC.has(f.toLowerCase()) || /["',]/.test(f) ? f : `"${f}"`);
 
 let measureCtx: CanvasRenderingContext2D | null = null;
 const mctx = () => (measureCtx ??= ctx2d(makeCanvas(4, 4)));
@@ -91,13 +111,8 @@ export function drawContent(ctx: CanvasRenderingContext2D, l: Layer) {
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(l.canvas, 0, 0, l.w, l.h);
   } else if (l.type === 'smart') {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, l.w, l.h);
-    ctx.clip();
-    ctx.scale(l.w / l.content.width, l.h / l.content.height);
-    drawLayers(ctx, l.content.layers);
-    ctx.restore();
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(smartPixels(l.content), 0, 0, l.w, l.h);
   } else if (l.type === 'shape') drawShape(ctx, l);
   else if (l.type === 'text') drawText(ctx, l);
 }

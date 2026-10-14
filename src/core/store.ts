@@ -95,7 +95,12 @@ export function commit(label: string, ds: DocState | null = cur()) {
 function syncSmartParent(ds: DocState, label: string) {
   const parent = docs.value.find((d) => d.doc.id === ds.smartLink!.docId);
   const l = parent && findLayer(parent.doc, ds.smartLink!.layerId);
-  if (!parent || !l || l.type !== 'smart') return;
+  if (!parent || !l || l.type !== 'smart') {
+    // The parent tab was closed (or the layer deleted): stop syncing and say so once.
+    ds.smartLink = undefined;
+    toast('The Smart Object\'s original document is closed. Save this tab to keep your edits.', 'error');
+    return;
+  }
   l.content = { width: ds.doc.width, height: ds.doc.height, layers: cloneLayers(ds.doc.layers) };
   commit(`Edit Smart Object: ${label}`, parent);
 }
@@ -111,6 +116,7 @@ export function jumpTo(i: number, ds: DocState | null = cur()) {
   ds.hIndex = i;
   restore(ds, ds.history[i]);
   ds.dirty = true;
+  if (ds.smartLink) syncSmartParent(ds, ds.history[i].label);
 }
 export const undo = () => { const ds = cur(); if (ds) jumpTo(ds.hIndex - 1, ds); };
 export const redo = () => { const ds = cur(); if (ds) jumpTo(ds.hIndex + 1, ds); };

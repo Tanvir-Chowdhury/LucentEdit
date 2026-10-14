@@ -355,7 +355,7 @@ function MenuItems({ items }: { items: MenuEntry[] }) {
         if (typeof it === 'object') {
           return (
             <div class="menu-root" onMouseEnter={() => setSub(i)} onMouseLeave={() => setSub(null)}>
-              <button class={`menu-item${sub === i ? ' hl' : ''}`}>{it.label}<span class="chev"><Icon name="right" size={13} /></span></button>
+              <button class={`menu-item${sub === i ? ' hl' : ''}`}><span style={{ width: 14, display: 'inline-grid' }} />{it.label}<span class="chev"><Icon name="right" size={13} /></span></button>
               {sub === i && <div class="menu-sub"><MenuItems items={it.items} /></div>}
             </div>
           );
@@ -364,7 +364,7 @@ function MenuItems({ items }: { items: MenuEntry[] }) {
         if (!c) return null;
         const v = viewOpts.value;
         const checked = (it === 'rulers' && v.rulers) || (it === 'gridToggle' && v.grid) || (it === 'snap' && v.snap) || (it === 'extras' && v.extras) || (it === 'showGuides' && v.guides) || (it === 'lockGuides' && v.lockGuides);
-        const label = c.label.replace(/^(Adjust|Filter): /, '');
+        const label = c.label.replace(/^[^:]+: /, ''); // the submenu already names the group
         return (
           <button class="menu-item" disabled={c.enabled ? !c.enabled() : false} onMouseEnter={() => setSub(null)} onClick={() => { openMenu.value = null; c.run(); }}>
             <span style={{ width: 14, display: 'inline-grid' }}>{checked && <Icon name="check" size={13} />}</span>
@@ -415,7 +415,7 @@ export function Tabs() {
       {docs.value.map((ds, i) => (
         <button class={`tab${i === activeIndex.value ? ' on' : ''}`} onClick={() => { activeIndex.value = i; touch(); }} onAuxClick={(e) => { if (e.button === 1) closeDoc(i); }}>
           <span class="name">{ds.doc.name}</span>
-          <span style={{ color: 'var(--muted)' }}>{Math.round(ds.view.zoom * 100)}%</span>
+          <span class="zoom">{Math.round(ds.view.zoom * 100)}%</span>
           {ds.dirty && <span class="dirty" />}
           <span class="x" onClick={(e) => { e.stopPropagation(); if (!ds.dirty) closeDoc(i); else askConfirm(`Close "${ds.doc.name}"?`, 'Unsaved changes will be lost.', 'Close without saving', () => closeDoc(i)); }}><Icon name="x" size={12} /></span>
         </button>

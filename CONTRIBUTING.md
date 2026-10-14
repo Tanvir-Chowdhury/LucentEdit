@@ -22,7 +22,7 @@ Thanks for helping make LucentEdit better. Bug reports, feature ideas, docs fixe
 
 ## Before opening a pull request
 
-- `npm run typecheck` and `npm run build` pass.
+- `npm run typecheck`, `npm test`, `npm run build` and `cargo test --lib` (in `src-tauri/`) pass.
 - `cargo check` passes in `src-tauri/` if you touched Rust code.
 - Keep changes focused: one feature or fix per PR, with a short description of what and why.
 - UI changes: include a screenshot or short clip.

@@ -224,17 +224,52 @@ fn make_dir(path: String) -> Result<(), String> {
     std::fs::create_dir_all(&path).map_err(|e| format!("{path}: {e}"))
 }
 
-/// Deletes a file, or a directory with everything inside it.
+/// The Assets library folder the user chose. Deletes and renames are only allowed inside it,
+/// so a bug or a misbehaving MCP client can't touch other files.
+static LIBRARY_ROOT: Mutex<Option<std::path::PathBuf>> = Mutex::new(None);
+
+#[tauri::command]
+fn set_library_root(path: Option<String>) -> Result<(), String> {
+    let root = match path {
+        Some(p) => Some(std::fs::canonicalize(&p).map_err(|e| format!("{p}: {e}"))?),
+        None => None,
+    };
+    *LIBRARY_ROOT.lock().unwrap() = root;
+    Ok(())
+}
+
+/// Canonical form of `path` if it lies strictly inside the library root.
+fn inside_library(path: &str) -> Result<std::path::PathBuf, String> {
+    let root = LIBRARY_ROOT.lock().unwrap().clone().ok_or("no Assets library folder is open")?;
+    let p = Path::new(path);
+    // The target of a rename doesn't exist yet: resolve its parent instead.
+    let canon = match std::fs::canonicalize(p) {
+        Ok(c) => c,
+        Err(_) => {
+            let parent = p.parent().ok_or_else(|| format!("{path}: invalid path"))?;
+            let name = p.file_name().ok_or_else(|| format!("{path}: invalid path"))?;
+            std::fs::canonicalize(parent).map_err(|e| format!("{path}: {e}"))?.join(name)
+        }
+    };
+    if canon == root || !canon.starts_with(&root) {
+        return Err(format!("{path} is outside the Assets library folder"));
+    }
+    Ok(canon)
+}
+
+/// Deletes a file, or a directory with everything inside it (inside the library only).
 #[tauri::command]
 fn remove_path(path: String) -> Result<(), String> {
-    let p = Path::new(&path);
-    let r = if p.is_dir() { std::fs::remove_dir_all(p) } else { std::fs::remove_file(p) };
+    let p = inside_library(&path)?;
+    let r = if p.is_dir() { std::fs::remove_dir_all(&p) } else { std::fs::remove_file(&p) };
     r.map_err(|e| format!("{path}: {e}"))
 }
 
 #[tauri::command]
 fn rename_path(from: String, to: String) -> Result<(), String> {
-    if Path::new(&to).exists() {
+    let (src, dst) = (inside_library(&from)?, inside_library(&to)?);
+    // A case-only rename on case-insensitive file systems resolves to the same file: allow it.
+    if Path::new(&to).exists() && src != dst {
         return Err(format!("{to} already exists"));
     }
     std::fs::rename(&from, &to).map_err(|e| format!("{from}: {e}"))
@@ -308,8 +343,37 @@ pub fn run() {
             make_dir,
             remove_path,
             rename_path,
+            set_library_root,
             list_system_fonts
         ])
         .run(tauri::generate_context!())
         .expect("error while running LucentEdit");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn deletes_and_renames_stay_inside_the_library() {
+        let base = std::env::temp_dir().join(format!("lucentedit-test-{}", std::process::id()));
+        let lib = base.join("lib");
+        std::fs::create_dir_all(lib.join("Logos")).unwrap();
+        std::fs::write(lib.join("Logos/a.png"), b"x").unwrap();
+        std::fs::write(base.join("outside.txt"), b"x").unwrap();
+        let s = |p: std::path::PathBuf| p.to_string_lossy().into_owned();
+
+        assert!(remove_path(s(lib.join("Logos/a.png"))).is_err(), "no root set yet");
+        set_library_root(Some(s(lib.clone()))).unwrap();
+        assert!(remove_path(s(base.join("outside.txt"))).is_err());
+        assert!(remove_path(s(lib.join("../outside.txt"))).is_err());
+        assert!(remove_path(s(lib.clone())).is_err(), "never the root itself");
+        assert!(rename_path(s(lib.join("Logos/a.png")), s(base.join("stolen.png"))).is_err());
+        rename_path(s(lib.join("Logos/a.png")), s(lib.join("Logos/b.png"))).unwrap();
+        remove_path(s(lib.join("Logos"))).unwrap();
+        assert!(base.join("outside.txt").exists() && !lib.join("Logos").exists());
+
+        set_library_root(None).unwrap();
+        std::fs::remove_dir_all(&base).unwrap();
+    }
 }

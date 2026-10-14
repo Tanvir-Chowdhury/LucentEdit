@@ -288,12 +288,28 @@ export function buildSvg(doc: Doc): string {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${doc.width}" height="${doc.height}" viewBox="0 0 ${doc.width} ${doc.height}">\n<defs>${defs.join('')}</defs>\n${bgRect}\n${content}\n</svg>\n`;
 }
 
+/** Parses SVG text without running anything in it: scripts, event handlers, embedded HTML and
+ *  javascript: links are removed before the nodes enter the page. */
+export function sanitizeSvg(text: string): Element {
+  const parsed = new DOMParser().parseFromString(text, 'image/svg+xml');
+  const svg = parsed.documentElement;
+  if (svg.nodeName.toLowerCase() !== 'svg' || parsed.querySelector('parsererror')) throw new Error('Not a valid SVG file');
+  for (const el of Array.from(svg.querySelectorAll('script, foreignObject, iframe, embed, object, audio, video'))) el.remove();
+  for (const el of [svg, ...Array.from(svg.querySelectorAll('*'))]) {
+    for (const a of Array.from(el.attributes)) {
+      const v = a.value.trim().toLowerCase();
+      if (a.name.toLowerCase().startsWith('on') || (/href$/i.test(a.name) && /^(javascript|data:text\/html)/.test(v))) el.removeAttribute(a.name);
+    }
+  }
+  return document.importNode(svg, true);
+}
+
 // SVG import: render into a hidden DOM node so the browser resolves CSS, transforms and units.
 
 export async function importSvg(text: string): Promise<{ layers: Layer[]; width: number; height: number }> {
   const host = document.createElement('div');
   host.style.cssText = 'position:fixed;left:-99999px;top:0;visibility:hidden;pointer-events:none';
-  host.innerHTML = text.replace(/<\?xml[^>]*>|<!DOCTYPE[^>]*>/gi, '');
+  host.appendChild(sanitizeSvg(text));
   document.body.appendChild(host);
   try {
     const svg = host.querySelector('svg') as SVGSVGElement | null;

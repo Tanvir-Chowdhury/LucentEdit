@@ -9,7 +9,8 @@ import { fitText } from '../core/render';
 // Move tool with Photoshop-style free transform: drag to move (Alt duplicates), handles to
 // resize (Shift keeps proportions, Alt from center), drag outside a corner to rotate.
 
-export const ACCENT = '#8b5cf6';
+/** Canvas overlay accent (matches --accent in styles.css). */
+export const ACCENT = '#3d84f7';
 const HANDLE = 8;
 
 type Mode = 'move' | 'resize' | 'rotate' | 'band' | null;
@@ -54,9 +55,15 @@ function handlePoints(t: Target) {
   });
 }
 
+/** A short edge on screen drops its middle handle so corners stay clickable and readable. */
+const shortEdge = (pts: { x: number; y: number }[], i: number) => Math.hypot(pts[i - 1].x - pts[(i + 1) % 8].x, pts[i - 1].y - pts[(i + 1) % 8].y) < 40;
+
 function hitHandle(t: Target, e: PEvent): { handle: number; rotate: boolean } | null {
   const pts = handlePoints(t);
-  for (let i = 0; i < 8; i++) if (Math.abs(pts[i].x - e.sx) <= HANDLE && Math.abs(pts[i].y - e.sy) <= HANDLE) return { handle: i, rotate: false };
+  for (let i = 0; i < 8; i++) {
+    if (i % 2 && shortEdge(pts, i)) continue; // hidden middle handle (see drawTransformBox)
+    if (Math.abs(pts[i].x - e.sx) <= HANDLE && Math.abs(pts[i].y - e.sy) <= HANDLE) return { handle: i, rotate: false };
+  }
   if (t.single && t.single.type !== 'group') {
     for (const i of [0, 2, 4, 6]) {
       const d = Math.hypot(pts[i].x - e.sx, pts[i].y - e.sy);
@@ -340,10 +347,8 @@ export function drawTransformBox(o: OverlayCtx, box: Target['box'], rotateHint: 
   [0, 2, 4, 6].forEach((i, k) => (k ? ctx.lineTo(pts[i].x, pts[i].y) : ctx.moveTo(pts[i].x, pts[i].y)));
   ctx.closePath();
   ctx.stroke();
-  // Small boxes on screen only get corner handles so they stay clickable and readable.
-  const small = Math.hypot(pts[0].x - pts[4].x, pts[0].y - pts[4].y) < 48;
   for (const [i, p] of pts.entries()) {
-    if (small && i % 2) continue;
+    if (i % 2 && shortEdge(pts, i)) continue;
     ctx.fillStyle = '#fff';
     ctx.strokeStyle = ACCENT;
     ctx.lineWidth = 1.5;
@@ -356,13 +361,17 @@ export function drawTransformBox(o: OverlayCtx, box: Target['box'], rotateHint: 
 }
 
 export function drawPill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
-  ctx.font = '600 11px "Inter Variable", system-ui, sans-serif';
+  // Neutral readout chip (like Photoshop's transform info), so it never competes with the artwork.
+  ctx.font = '500 11px "Inter Variable", system-ui, sans-serif';
   const w = ctx.measureText(text).width + 14;
-  ctx.fillStyle = ACCENT;
+  ctx.fillStyle = 'rgba(28,28,31,0.92)';
+  ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+  ctx.lineWidth = 1;
   ctx.beginPath();
-  (ctx as any).roundRect ? (ctx as any).roundRect(x - w / 2, y - 10, w, 20, 6) : ctx.rect(x - w / 2, y - 10, w, 20);
+  (ctx as any).roundRect ? (ctx as any).roundRect(x - w / 2, y - 10, w, 20, 4) : ctx.rect(x - w / 2, y - 10, w, 20);
   ctx.fill();
-  ctx.fillStyle = '#fff';
+  ctx.stroke();
+  ctx.fillStyle = '#e8e8ea';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(text, x, y + 0.5);

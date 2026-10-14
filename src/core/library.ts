@@ -3,7 +3,7 @@ import type { Layer } from './types';
 import { isTauri, tauriInvoke, readPath, writePath, layersFromFile, exportBytes } from './io';
 import { cur, commit, toast, createDoc, touch } from './store';
 import { addLayer, moveLayer, topLevel } from './ops';
-import { bounds, unionRects, cloneLayers, bytesToDataURL, makeCanvas, ctx2d } from './util';
+import { bounds, unionRects, cloneLayers, makeCanvas, ctx2d } from './util';
 import { flatten } from './render';
 
 // Assets library: a folder chosen by the user. Each subfolder is a category, each file inside
@@ -176,12 +176,14 @@ export async function restoreLibrary() {
 
 export function disconnectLibrary() {
   fs = null;
+  if (isTauri) tauriInvoke('set_library_root', { path: null }).catch(() => {});
   try { localStorage.removeItem(STORE_KEY); } catch { /* storage unavailable */ }
   library.value = { root: null, categories: [], brands: [], assets: [], palettes: [], loading: false };
 }
 
 async function connect(root: string, f: LibFS) {
   await f.mkdir(''); // creates the folder if it doesn't exist yet
+  if (isTauri) await tauriInvoke('set_library_root', { path: root }); // deletes/renames stay inside it
   const top = await f.list('');
   fs = f;
   library.value = { ...library.value, root, loading: true, error: undefined };
@@ -191,10 +193,13 @@ async function connect(root: string, f: LibFS) {
 }
 
 async function readMeta(): Promise<Meta> {
-  try {
-    const m = JSON.parse(new TextDecoder().decode(await fs!.read(META_FILE)));
-    return { version: 1, assets: m.assets ?? {}, palettes: Array.isArray(m.palettes) ? m.palettes : [] };
-  } catch { return { version: 1, assets: {}, palettes: [] }; }
+  // Only a missing file means "empty": a damaged one must not be overwritten with nothing.
+  if (!(await fs!.list('')).some((e) => e.name === META_FILE)) return { version: 1, assets: {}, palettes: [] };
+  let m: any;
+  try { m = JSON.parse(new TextDecoder().decode(await fs!.read(META_FILE))); } catch {
+    throw new Error(`${META_FILE} in your Assets folder is damaged. Fix or remove it, then refresh.`);
+  }
+  return { version: 1, assets: m.assets ?? {}, palettes: Array.isArray(m.palettes) ? m.palettes : [] };
 }
 
 async function writeMeta(m: Meta) {
@@ -270,6 +275,7 @@ export async function updateBrand(name: string, patch: Partial<Omit<Brand, 'name
   return brandByName(name)!;
 }
 
+/** Renames a brand folder; returns the (sanitized) new name. */
 export async function renameBrand(from: string, to: string) {
   const t = safeName(to);
   const f = need();
@@ -280,6 +286,7 @@ export async function renameBrand(from: string, to: string) {
   await writeMeta(meta);
   if (activeBrand.value === from) setActiveBrand(t);
   await refreshLibrary();
+  return t;
 }
 
 export async function deleteBrand(name: string) {
@@ -409,6 +416,9 @@ export async function saveLayersAsAsset(category: string, name: string, format: 
   doc.layers.forEach((l) => moveLayer(l, -x, -y));
   const bytes = await exportBytes(doc, format);
   category = category.split('/').map(safeName).join('/'); // keeps Brands/<brand>/<category> paths intact
+  const parts = category.split('/');
+  const isBrand = parts[0].toLowerCase() === BRANDS_DIR.toLowerCase();
+  if (isBrand ? parts.length !== 3 : parts.length !== 1) throw new Error(`"${category}" isn't a category: use a plain name like "Logos" (pass brand to save into a brand)`);
   const file = uniqueName(category, `${safeName(name)}.${format}`);
   await need().mkdir(category);
   await need().write(join(category, file), bytes);
@@ -425,11 +435,12 @@ const MIME: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg
 export function assetThumb(a: Asset, size = 160): Promise<string | null> {
   const key = `${a.id}:${a.modified}:${a.size}:${size}`;
   let p = thumbs.get(key);
-  if (!p) {
+  if (p) thumbs.delete(key); // re-inserted below: the Map's order is least-recently-used first
+  else {
     p = (async () => {
       try {
         const bytes = await readAsset(a);
-        if (MIME[a.ext]) return bytesToDataURL(bytes, MIME[a.ext]);
+        if (MIME[a.ext]) return await downscaled(bytes, MIME[a.ext], size);
         if (a.kind === 'document') {
           const { docFromFile } = await import('./io');
           const d = await docFromFile({ name: a.file, bytes });
@@ -438,9 +449,24 @@ export function assetThumb(a: Asset, size = 160): Promise<string | null> {
         return null;
       } catch { return null; }
     })();
-    thumbs.set(key, p);
   }
+  thumbs.set(key, p);
+  if (thumbs.size > 400) thumbs.delete(thumbs.keys().next().value!);
   return p;
+}
+
+/** A small PNG of an image file, so the cache holds previews, not whole photos. */
+async function downscaled(bytes: Uint8Array, mime: string, size: number): Promise<string> {
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: mime }));
+  try {
+    const img = new Image();
+    await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+    const w = img.naturalWidth || size, h = img.naturalHeight || size;
+    const s = Math.min(1, size / Math.max(w, h));
+    const c = makeCanvas(Math.max(1, Math.round(w * s)), Math.max(1, Math.round(h * s)));
+    ctx2d(c).drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/png');
+  } finally { URL.revokeObjectURL(url); }
 }
 
 /** Small PNG preview for MCP clients (base64, no data: prefix). */

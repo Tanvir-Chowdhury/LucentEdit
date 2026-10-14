@@ -59,6 +59,7 @@ jobs:
 
       - name: Install npm dependencies
         shell: bash
+        # Fallback: npm ci can miss platform-only optional deps (npm/cli#4828) on macOS/Windows.
         run: npm ci || (rm -rf node_modules && npm install)
 
       - uses: tauri-apps/tauri-action@v0

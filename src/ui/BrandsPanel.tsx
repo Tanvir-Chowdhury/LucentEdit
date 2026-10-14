@@ -8,6 +8,7 @@ import {
 } from '../core/library';
 import { fontWeights } from '../core/fonts';
 import { setProps } from '../core/ops';
+import { cssFamily } from '../core/render';
 import { FontPicker } from './FontPicker';
 import { Swatch } from './controls';
 import { askConfirm, askText } from './dialogs';
@@ -20,13 +21,25 @@ const editing = signal<string | null>(null);
 const ROLES: BrandColor['role'][] = ['primary', 'secondary', 'accent', 'text', 'background', 'other'];
 const run = (p: Promise<unknown>, ok?: string) => p.then(() => ok && toast(ok, 'success')).catch((e) => toast(String(e?.message ?? e), 'error'));
 
-/** Brand edits update the panel at once and are written to brand.json shortly after. */
-let saveTimer = 0;
+/** Brand edits update the panel at once and are written to brand.json shortly after.
+ *  Pending edits are kept per brand and merged, so quick edits to several fields all land. */
+const pending = new Map<string, { timer: number; patch: Partial<Brand> }>();
 function saveSoon(b: Brand, patch: Partial<Brand>) {
   Object.assign(b, patch);
   library.value = { ...library.value };
-  clearTimeout(saveTimer);
-  saveTimer = window.setTimeout(() => run(updateBrand(b.name, patch)), 400);
+  const p = pending.get(b.name) ?? { timer: 0, patch: {} };
+  clearTimeout(p.timer);
+  p.patch = { ...p.patch, ...patch };
+  p.timer = window.setTimeout(() => void flush(b.name), 400);
+  pending.set(b.name, p);
+}
+/** Writes a brand's pending edits now (before it is renamed or deleted). */
+function flush(name: string): Promise<unknown> {
+  const p = pending.get(name);
+  if (!p) return Promise.resolve();
+  clearTimeout(p.timer);
+  pending.delete(name);
+  return run(updateBrand(name, p.patch));
 }
 
 /** Apply brand fonts to selected text layers: large text gets the heading font, the rest the body font. */
@@ -62,7 +75,7 @@ function FontRow({ b, role, label }: { b: Brand; role: 'heading' | 'body' | 'acc
         )}
         {f && <button class="icon-btn" title="Remove" onClick={() => set(undefined)}><Trash2 size={12} /></button>}
       </div>
-      {f && <div class="brand-font-preview" style={{ fontFamily: `"${f.family}"`, fontWeight: f.weight ?? 400, fontSize: role === 'heading' ? 22 : 15 }}>{role === 'heading' ? 'The quick brown fox' : 'Jumps over the lazy dog 0123456789'}</div>}
+      {f && <div class="brand-font-preview" style={{ fontFamily: cssFamily(f.family), fontWeight: f.weight ?? 400, fontSize: role === 'heading' ? 22 : 15 }}>{role === 'heading' ? 'The quick brown fox' : 'Jumps over the lazy dog 0123456789'}</div>}
     </div>
   );
 }
@@ -76,8 +89,8 @@ function BrandEditor({ b }: { b: Brand }) {
       <div class="row" style={{ marginBottom: 8 }}>
         <b style={{ fontSize: 14, flex: 1 }}>{b.name}</b>
         <button class={`btn${active ? ' primary' : ''}`} title="The active brand's fonts and colors are offered first in pickers and to AI agents" onClick={() => setActiveBrand(active ? null : b.name)}><Star size={13} /> {active ? 'Active' : 'Set active'}</button>
-        <button class="icon-btn" title="Rename brand" onClick={() => askText('Rename brand', 'Name', b.name, (v) => { run(renameBrand(b.name, v)); editing.value = v; })}><Pencil size={13} /></button>
-        <button class="icon-btn" title="Delete brand" onClick={() => askConfirm(`Delete brand "${b.name}"?`, 'Its folder, brand kit and every asset in it are deleted from disk.', 'Delete', () => { run(deleteBrand(b.name)); editing.value = null; })}><Trash2 size={13} /></button>
+        <button class="icon-btn" title="Rename brand" onClick={() => askText('Rename brand', 'Name', b.name, (v) => { run(flush(b.name).then(() => renameBrand(b.name, v)).then((n) => { editing.value = n; })); })}><Pencil size={13} /></button>
+        <button class="icon-btn" title="Delete brand" onClick={() => askConfirm(`Delete brand "${b.name}"?`, 'Its folder, brand kit and every asset in it are deleted from disk.', 'Delete', () => { pending.delete(b.name); run(deleteBrand(b.name)); editing.value = null; })}><Trash2 size={13} /></button>
       </div>
 
       <div class="section-title">Colors

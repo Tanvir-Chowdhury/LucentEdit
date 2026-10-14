@@ -43,7 +43,10 @@ type FillOpts = { auto: boolean; newLayer: boolean; colorAdapt: boolean };
 export async function contentAwareFill(o: FillOpts) {
   const ds = cur();
   if (!ds?.mask) return;
-  const l = editablePixels(activeLayer(ds), ds); // rasterizes / takes ownership of the pixels
+  const src = activeLayer(ds);
+  if (src?.type === 'raster' && src.locked && !o.newLayer) { toast('Layer is locked', 'error'); return; }
+  // Pixel layers are only read here; other layers have to be rasterized first.
+  const l = src?.type === 'raster' ? src : editablePixels(src, ds);
   if (!l) return;
   const { width: W, height: H } = l.canvas;
   const md = ctx2d(maskForLayer(ds, l)!).getImageData(0, 0, W, H).data, alpha = new Uint8Array(W * H);
@@ -69,7 +72,11 @@ export async function contentAwareFill(o: FillOpts) {
     ctx2d(c).putImageData(out, 0, 0);
     const nl = Object.assign(newRaster(ds, 'Content-Aware Fill', c), { x: l.x, y: l.y, w: l.w, h: l.h, rotation: l.rotation });
     addLayer(nl, ds, l.id);
-  } else ctx2d(l.canvas).putImageData(out, 0, 0);
+  } else {
+    const c = makeCanvas(W, H); // history snapshots share the old canvas: never write into it
+    ctx2d(c).putImageData(out, 0, 0);
+    l.canvas = c;
+  }
   commit('Content-Aware Fill', ds);
 }
 

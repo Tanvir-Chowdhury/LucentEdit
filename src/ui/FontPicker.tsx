@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Search, ChevronDown } from 'lucide-preact';
 import { systemFonts, systemFontsState, loadSystemFonts, GENERIC_FONTS } from '../core/fonts';
+import { cssFamily } from '../core/render';
 import { libraryFonts, activeBrand, brandByName, library } from '../core/library';
 
 // Searchable font picker: brand fonts first, then fonts from the Assets library, then every
@@ -33,7 +34,7 @@ export function FontPicker({ value, onChange, width = 170 }: { value: string; on
   const pick = (f: string) => { onChange(f); setOpen(false); setQ(''); };
   return (
     <div class="fontpick" ref={box} style={{ width }}>
-      <button class="fontpick-btn" style={{ fontFamily: `"${value}"` }} onClick={() => setOpen(!open)} title={value}>
+      <button class="fontpick-btn" style={{ fontFamily: cssFamily(value) }} onClick={() => setOpen(!open)} title={value}>
         <span>{value}</span><ChevronDown size={13} />
       </button>
       {open && (
@@ -49,7 +50,7 @@ export function FontPicker({ value, onChange, width = 170 }: { value: string; on
                   <div class="fontpick-group">{title}{items.length > shown.length && ` (${shown.length} of ${items.length}, search to narrow)`}</div>
                   {shown.map((it) => (
                     <button class={`fontpick-item${it.family === value ? ' on' : ''}`} onClick={() => pick(it.family)}>
-                      <span style={{ fontFamily: `"${it.family}", ${'sans-serif'}` }}>{it.family}</span>{it.hint && <small>{it.hint}</small>}
+                      <span style={{ fontFamily: `${cssFamily(it.family)}, sans-serif` }}>{it.family}</span>{it.hint && <small>{it.hint}</small>}
                     </button>
                   ))}
                 </>

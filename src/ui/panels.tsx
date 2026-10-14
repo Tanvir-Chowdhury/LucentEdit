@@ -318,7 +318,7 @@ function EffectsProps({ l }: { l: Layer }) {
         </div>
       )}
       <div class="row">
-        <label class="opt grow"><input type="checkbox" checked={!!gl?.enabled} onChange={(e) => { set({ ...fx, glow: { color: '#a855f7', blur: 30, ...gl, enabled: (e.target as HTMLInputElement).checked } }); commit('Outer Glow'); }} /> Outer glow</label>
+        <label class="opt grow"><input type="checkbox" checked={!!gl?.enabled} onChange={(e) => { set({ ...fx, glow: { color: '#ffffff', blur: 30, ...gl, enabled: (e.target as HTMLInputElement).checked } }); commit('Outer Glow'); }} /> Outer glow</label>
         {gl?.enabled && <Swatch value={gl.color} onChange={(c) => set({ ...fx, glow: { ...gl, color: c } })} onDone={done('Glow Color')} />}
       </div>
       {gl?.enabled && (
@@ -470,8 +470,8 @@ function LayerRow({ l, depth, ds, anchor }: { l: Layer; depth: number; ds: DocSt
           ) : (
             <>
               {l.name}
-              {l.type === 'smart' && <span title="Smart Object" style={{ marginLeft: 6, color: 'var(--accent-3)', fontSize: 10, fontWeight: 700 }}>SO</span>}
-              {l.effects && (l.effects.shadow?.enabled || l.effects.glow?.enabled) && <span style={{ marginLeft: 6, color: 'var(--accent)', fontSize: 10, fontWeight: 700 }}>fx</span>}
+              {l.type === 'smart' && <span class="badge" title="Smart Object">SO</span>}
+              {l.effects && (l.effects.shadow?.enabled || l.effects.glow?.enabled) && <span class="badge" title="Layer effects">fx</span>}
             </>
           )}
         </div>

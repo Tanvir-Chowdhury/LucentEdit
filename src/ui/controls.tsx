@@ -192,12 +192,12 @@ function evalNum(s: string): number | null {
 /** Fill/stroke paint editor: none, solid or gradient with stops. */
 export function PaintEditor({ value, onChange, onCommit, allowNone = true }: { value: Paint | null; onChange: (p: Paint | null) => void; onCommit: () => void; allowNone?: boolean }) {
   const kind = value == null ? 'none' : typeof value === 'string' ? 'solid' : value.type;
-  const firstColor = value == null ? '#8b5cf6' : typeof value === 'string' ? value : value.stops[0]?.color ?? '#000';
+  const firstColor = value == null ? '#3d84f7' : typeof value === 'string' ? value : value.stops[0]?.color ?? '#000';
   const setKind = (k: string) => {
     if (k === 'none') onChange(null);
     else if (k === 'solid') onChange(firstColor);
     else {
-      const stops = typeof value === 'object' && value ? value.stops : [{ offset: 0, color: firstColor }, { offset: 1, color: '#22d3ee' }];
+      const stops = typeof value === 'object' && value ? value.stops : [{ offset: 0, color: firstColor }, { offset: 1, color: '#ffffff' }];
       onChange({ type: k as 'linear' | 'radial', angle: (value as Gradient)?.angle ?? 90, stops });
     }
     onCommit();

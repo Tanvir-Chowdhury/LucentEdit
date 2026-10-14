@@ -3,7 +3,22 @@ import { BLEND_MODES } from '../core/types';
 import {
   cur, docs, activeIndex, commit, touch, undo, redo, createDoc, openDocState, mcpStatus, findLayerIn,
 } from './bridge';
-import { whenIdle } from '../core/store';
+import { whenIdle, dialog } from '../core/store';
+import { transformActive, applyTransform } from '../tools/warp';
+
+/** Shows a confirm dialog; resolves false when the user cancels or closes it. */
+function userApproves(title: string, message: string, okLabel: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    let ok = false;
+    dialog.value = { kind: 'confirm', data: { title, message, okLabel, onOk: () => { ok = true; } } };
+    const shown = dialog.value;
+    const stop = dialog.subscribe((v) => {
+      if (v === shown) return;
+      stop();
+      setTimeout(() => resolve(ok)); // the OK handler runs right after the dialog closes
+    });
+  });
+}
 import {
   newShape, newPath, newText, newRaster, addLayer, removeLayers, setProps, reorder, align, distribute, layerSummary,
   toPaint, toStroke, duplicateLayerOp, groupIds, ungroupId, resizeCanvas, resizeImage,
@@ -479,6 +494,9 @@ const TOOLS: ToolDef[] = [
     inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
     run: async (a) => {
       const L = await import('../core/library');
+      // The library folder decides what delete/rename may touch, so the user must approve a change.
+      if (!(await userApproves('Use this Assets folder?', `An AI agent wants to use "${a.path}" as your Assets library. It will be able to add, rename and delete files inside it.`, 'Use folder')))
+        throw new Error('The user declined to change the Assets folder');
       await L.useLibraryFolder(String(a.path));
       return { folder: L.library.value.root, categories: L.library.value.categories };
     },
@@ -532,7 +550,7 @@ const TOOLS: ToolDef[] = [
       const patch: any = {};
       for (const k of ['colors', 'fonts', 'guidelines', 'tagline', 'website']) if (a[k] !== undefined) patch[k] = a[k];
       let b = await L.updateBrand(String(a.name), patch);
-      if (a.new_name) { await L.renameBrand(b.name, String(a.new_name)); b = L.brandByName(String(a.new_name))!; }
+      if (a.new_name) b = L.brandByName(await L.renameBrand(b.name, String(a.new_name)))!;
       return b;
     },
   },
@@ -720,7 +738,9 @@ const TOOLS: ToolDef[] = [
     run: async (a) => {
       const ds = need(cur());
       const fmt = a.format as ExportFormat;
-      const bytes = await exportBytes(ds.doc, fmt, { scale: num(a.scale, 1), quality: num(a.quality, 0.92) });
+      // Keep the longest exported side at or under 16000 px (canvas limits; huge sizes hang the app).
+      const scale = Math.min(Math.max(num(a.scale, 1), 0.01), 16000 / Math.max(ds.doc.width, ds.doc.height));
+      const bytes = await exportBytes(ds.doc, fmt, { scale, quality: Math.min(Math.max(num(a.quality, 0.92), 0), 1) });
       if (a.path) {
         if (!isTauri) throw new Error('Writing files requires the LucentEdit desktop app');
         await writePath(a.path, bytes);
@@ -821,7 +841,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.5.0' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.6.0' },
         instructions: GUIDE,
       });
     }
@@ -833,6 +853,8 @@ async function handleOne(m: Json): Promise<Json | null> {
       const t = TOOLS.find((x) => x.name === m.params?.name);
       if (!t) return fail(-32602, `Unknown tool: ${m.params?.name}`);
       await whenIdle();
+      // A live Skew/Warp session shows a low-res preview: apply it so agents never snapshot the preview.
+      if (transformActive.value) applyTransform();
       mcpStatus.value = { ...mcpStatus.value, active: mcpStatus.value.active + 1, last: t.name };
       try {
         const r = await t.run(m.params?.arguments ?? {});
@@ -852,8 +874,9 @@ export async function handleMcp(body: string): Promise<string | null> {
   let msg: any;
   try { msg = JSON.parse(body); } catch { return JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'Parse error' } }); }
   if (Array.isArray(msg)) {
-    const out = (await Promise.all(msg.map(handleOne))).filter(Boolean);
-    return out.length ? JSON.stringify(out) : null;
+    const out = [];
+    for (const m of msg) out.push(await handleOne(m)); // in order: later calls may depend on earlier ones
+    return out.filter(Boolean).length ? JSON.stringify(out.filter(Boolean)) : null;
   }
   const r = await handleOne(msg);
   return r ? JSON.stringify(r) : null;

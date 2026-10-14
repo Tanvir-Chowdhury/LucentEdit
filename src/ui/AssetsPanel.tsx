@@ -7,6 +7,7 @@ import {
   importIntoCategory, deleteAsset, renameAsset, setAssetInfo, placeAsset, saveLayersAsAsset, assetThumb, savePalette,
   deletePalette, disconnectLibrary, Asset, brandByName, categoryLabel,
 } from '../core/library';
+import { cssFamily } from '../core/render';
 import { pickFiles } from '../core/io';
 import { askConfirm, askText } from './dialogs';
 
@@ -21,7 +22,7 @@ export const ASSET_MIME = 'application/x-lucentedit-asset';
 function Thumb({ a }: { a: Asset }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => { let live = true; assetThumb(a).then((u) => live && setSrc(u)); return () => { live = false; }; }, [a.id, a.modified, a.size]);
-  if (a.kind === 'font') return <div class="asset-font" style={{ fontFamily: `"${a.name}"` }}>Aa</div>;
+  if (a.kind === 'font') return <div class="asset-font" style={{ fontFamily: cssFamily(a.name) }}>Aa</div>;
   return src ? <img src={src} alt="" draggable={false} /> : <div class="asset-ext">{a.ext.toUpperCase()}</div>;
 }
 

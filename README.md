@@ -341,7 +341,7 @@ Use the HTTP URL `http://127.0.0.1:47800/mcp` if the client supports Streamable 
 | **Layers & guides** | `merge_layers` (down, visible, flatten), `set_guides`, `convert_to_smart_object`, `transform_layer` (distort / perspective by corners) |
 | **Content-aware** | `select_subject` (subject or sky), `content_aware_fill` |
 | **Brands** | `list_brands`, `get_brand` (colors, fonts, guidelines, assets), `create_brand`, `update_brand`, `set_active_brand`; `list_fonts` returns every installed font with weights |
-| **Assets library** | `list_assets` (categories, tags, brand palettes, fonts; filter by brand), `get_asset_preview`, `place_asset`, `save_asset`, `manage_assets` (categories, tags, palettes), `set_assets_folder` |
+| **Assets library** | `list_assets` (categories, tags, brand palettes, fonts; filter by brand), `get_asset_preview`, `place_asset`, `save_asset`, `manage_assets` (categories, tags, palettes), `set_assets_folder` (the user confirms the change in the app) |
 | **See the result** | `render_preview` (returns a PNG so the agent can look at its own work) |
 | **Files** | `export_document` (png, jpg, webp, svg, psd, lucentedit), `open_file`, `save_document` |
 | **History** | `undo`, `redo` |

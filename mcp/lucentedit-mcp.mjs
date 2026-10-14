@@ -37,8 +37,12 @@ async function forward(line) {
         body: line,
       });
       if (r.status === 202) return;
-      const text = await r.text();
-      if (text.trim()) process.stdout.write(text.trim() + '\n');
+      const text = (await r.text()).trim();
+      // stdout is the JSON-RPC channel: anything that isn't JSON becomes an error reply.
+      let json = null;
+      try { json = text && JSON.parse(text); } catch { /* not JSON */ }
+      if (r.ok && json) return out(json);
+      for (const m of ids) out({ jsonrpc: '2.0', id: m.id, error: { code: -32000, message: `LucentEdit returned HTTP ${r.status}: ${text.slice(0, 300)}` } });
       return;
     } catch {
       url = FIXED || null; // app restarted on another port? rediscover once
@@ -47,7 +51,7 @@ async function forward(line) {
   // App unreachable: still complete the handshake so the client registers the server.
   for (const m of ids) {
     if (m.method === 'initialize') {
-      out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'lucentedit', version: '0.5.0' }, instructions: NOT_RUNNING } });
+      out({ jsonrpc: '2.0', id: m.id, result: { protocolVersion: m.params?.protocolVersion ?? '2025-06-18', capabilities: { tools: {} }, serverInfo: { name: 'lucentedit', version: '0.6.0' }, instructions: NOT_RUNNING } });
     } else if (m.method === 'tools/list') {
       out({ jsonrpc: '2.0', id: m.id, result: { tools: [{ name: 'get_guide', description: NOT_RUNNING, inputSchema: { type: 'object', properties: {} } }] } });
     } else if (m.method === 'ping') {

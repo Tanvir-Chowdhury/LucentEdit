@@ -18,10 +18,11 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
+      - run: npm test
       - run: npm run build
 
   rust:
-    name: Rust (cargo check)
+    name: Rust (cargo check + test)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -44,3 +45,6 @@ jobs:
       - name: cargo check
         working-directory: src-tauri
         run: cargo check
+      - name: cargo test
+        working-directory: src-tauri
+        run: cargo test --lib

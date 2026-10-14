@@ -46,12 +46,11 @@ function Dialog({ title, sub, children, foot, wide }: { title: string; sub?: str
 }
 
 export function PresetCard({ p, on, onClick }: { p: { name: string; w: number; h: number; icon: string }; on?: boolean; onClick: () => void }) {
-  const s = 36 / Math.max(p.w, p.h);
+  const s = 22 / Math.max(p.w, p.h);
   return (
     <button class={`preset${on ? ' on' : ''}`} onClick={onClick}>
-      <div style={{ height: 40, display: 'grid', placeItems: 'center' }}><div class="shape" style={{ width: p.w * s, height: p.h * s }} /></div>
-      <span class="pname">{p.name}</span>
-      <span class="psize">{p.w} × {p.h} px</span>
+      <span class="glyph"><i class="shape" style={{ width: Math.max(4, p.w * s), height: Math.max(4, p.h * s) }} /></span>
+      <span class="ptext"><span class="pname">{p.name}</span><span class="psize">{p.w} × {p.h}</span></span>
     </button>
   );
 }
@@ -304,7 +303,7 @@ function AboutDialog() {
     <Dialog title="About LucentEdit" foot={<button class="btn primary" onClick={() => (dialog.value = null)}>Close</button>}>
       <div class="hero" style={{ marginBottom: 12 }}>
         <img src="/logo.svg" style={{ width: 56, height: 56, borderRadius: 14 }} />
-        <div><h1 style={{ fontSize: 22 }}><span>LucentEdit</span> 0.5.0</h1><p>Free, open-source image editor and vector design tool with a built-in MCP server.</p></div>
+        <div><h1 style={{ fontSize: 22 }}><span>LucentEdit</span> 0.6.0</h1><p>Free, open-source image editor and vector design tool with a built-in MCP server.</p></div>
       </div>
       <p style={{ color: 'var(--text-2)', lineHeight: 1.6 }}>No accounts, no subscriptions, no telemetry. Your files stay on your computer. Licensed under MIT.</p>
     </Dialog>

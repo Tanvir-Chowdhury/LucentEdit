@@ -63,14 +63,12 @@ export function stepLabel(s: Step): string {
   switch (s.kind) {
     case 'command': return COMMANDS.find((c) => c.id === s.id)?.label.replace(/…$/, '') ?? s.id;
     case 'filter': return filterById(s.id)?.name ?? s.id;
-    case 'mcp': return `MCP: ${s.tool}`;
     case 'stop': return 'Stop';
   }
 }
 
 export function stepDetail(s: Step): string {
   if (s.kind === 'filter') return Object.entries(s.params).map(([k, v]) => `${k}: ${v}`).join(', ');
-  if (s.kind === 'mcp') return JSON.stringify(s.args ?? {});
   if (s.kind === 'stop') return s.message;
   return '';
 }
@@ -179,11 +177,6 @@ async function runStep(s: Step, isLast: boolean): Promise<boolean> {
       if (!applyFilter(ds, l, f, s.params ?? {})) throw new Error('layer cannot be filtered');
       Object.assign(lastFilter, { id: f.id, params: { ...s.params } });
       commit(f.name, ds);
-      return true;
-    }
-    case 'mcp': {
-      const { callTool } = await import('../mcp/server');
-      await callTool(s.tool, s.args);
       return true;
     }
     case 'stop':

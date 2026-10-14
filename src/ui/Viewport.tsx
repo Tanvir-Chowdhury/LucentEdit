@@ -55,7 +55,7 @@ export function Viewport() {
     const ctx = c.getContext('2d')!;
     const dpr = st.current.dpr;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#0a0a0f';
+    ctx.fillStyle = '#18181a';
     ctx.fillRect(0, 0, c.width, c.height);
     if (!ds) return;
     const { zoom } = ds.view;
@@ -64,7 +64,7 @@ export function Viewport() {
     ctx.setTransform(M);
     // Page shadow
     ctx.save();
-    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowColor = 'rgba(0,0,0,0.45)';
     ctx.shadowBlur = 28 * dpr;
     ctx.shadowOffsetY = 6 * dpr;
     ctx.fillStyle = '#fff';
@@ -80,7 +80,7 @@ export function Viewport() {
     ctx.restore();
     if (viewOpts.value.grid && viewOpts.value.extras) {
       const step = niceStep(40 / zoom);
-      ctx.strokeStyle = 'rgba(139,92,246,0.22)';
+      ctx.strokeStyle = 'rgba(160,160,170,0.18)';
       ctx.lineWidth = 1 / zoom;
       ctx.beginPath();
       for (let x = 0; x <= W; x += step) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
@@ -138,7 +138,7 @@ export function Viewport() {
         ctx.beginPath();
         [[0, 0], [l.w, 0], [l.w, l.h], [0, l.h]].forEach(([x, y], i) => { const p = m.transformPoint({ x, y }); const s = view.toScreen(p.x, p.y); i ? ctx.lineTo(s.x, s.y) : ctx.moveTo(s.x, s.y); });
         ctx.closePath();
-        ctx.strokeStyle = 'rgba(139,92,246,0.55)';
+        ctx.strokeStyle = 'rgba(61,132,247,0.65)';
         ctx.lineWidth = 1;
         ctx.stroke();
       }
@@ -382,20 +382,20 @@ function niceStep(min: number) {
 
 function drawRulers(ctx: CanvasRenderingContext2D, w: number, h: number, v: { zoom: number; panX: number; panY: number }, dw: number, dh: number) {
   ctx.save();
-  ctx.fillStyle = 'rgba(17,17,24,0.96)';
+  ctx.fillStyle = '#222225';
   ctx.fillRect(0, 0, w, RULER);
   ctx.fillRect(0, 0, RULER, h);
-  ctx.fillStyle = 'rgba(139,92,246,0.18)';
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
   ctx.fillRect(v.panX, 0, dw * v.zoom, RULER);
   ctx.fillRect(0, v.panY, RULER, dh * v.zoom);
-  ctx.strokeStyle = '#30303d';
+  ctx.strokeStyle = '#2f2f34';
   ctx.beginPath();
   ctx.moveTo(0, RULER + 0.5); ctx.lineTo(w, RULER + 0.5);
   ctx.moveTo(RULER + 0.5, 0); ctx.lineTo(RULER + 0.5, h);
   ctx.stroke();
   const step = niceStep(70 / v.zoom);
-  ctx.fillStyle = '#7d7d92';
-  ctx.strokeStyle = '#4a4a5c';
+  ctx.fillStyle = '#85858d';
+  ctx.strokeStyle = '#4a4a50';
   ctx.font = '9.5px "Inter Variable", system-ui';
   ctx.textBaseline = 'top';
   ctx.beginPath();
@@ -418,14 +418,14 @@ function drawRulers(ctx: CanvasRenderingContext2D, w: number, h: number, v: { zo
   ctx.stroke();
   const cp = cursorPos.value;
   if (cp) {
-    ctx.strokeStyle = '#a78bfa';
+    ctx.strokeStyle = '#3d84f7';
     ctx.beginPath();
     const sx = Math.round(cp.x * v.zoom + v.panX) + 0.5, sy = Math.round(cp.y * v.zoom + v.panY) + 0.5;
     ctx.moveTo(sx, 0); ctx.lineTo(sx, RULER);
     ctx.moveTo(0, sy); ctx.lineTo(RULER, sy);
     ctx.stroke();
   }
-  ctx.fillStyle = '#111118';
+  ctx.fillStyle = '#222225';
   ctx.fillRect(0, 0, RULER, RULER);
   ctx.restore();
 }

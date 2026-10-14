@@ -1,6 +1,6 @@
 [package]
 name = "lucentedit"
-version = "0.5.0"
+version = "0.6.0"
 description = "LucentEdit: lightweight open-source image and vector editor"
 license = "MIT"
 edition = "2021"
