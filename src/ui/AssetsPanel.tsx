@@ -3,7 +3,7 @@ import { signal } from '@preact/signals';
 import { FolderOpen, RefreshCw, Plus, Upload, Save, Trash2, Pencil, Tag, Palette as PaletteIcon, FolderPlus, Unplug } from 'lucide-preact';
 import { cur, fg, bg, toast, selectedLayers, useTick } from '../core/store';
 import {
-  library, librarySupported, chooseLibraryFolder, refreshLibrary, createCategory, renameCategory, deleteCategory,
+  library, librarySupported, chooseLibraryFolder, reconnectLibrary, refreshLibrary, createCategory, renameCategory, deleteCategory,
   importIntoCategory, deleteAsset, renameAsset, setAssetInfo, placeAsset, saveLayersAsAsset, assetThumb, savePalette,
   deletePalette, disconnectLibrary, Asset, brandByName, categoryLabel,
 } from '../core/library';
@@ -47,19 +47,33 @@ function AssetCard({ a }: { a: Asset }) {
   );
 }
 
+/** Shown while no folder is connected: Reconnect the remembered one, or choose a folder. */
+export function ConnectFolder({ intro }: { intro: string }) {
+  const lib = library.value;
+  return (
+    <div class="empty" style={{ display: 'grid', gap: 10, justifyItems: 'center' }}>
+      {lib.pending ? (
+        <>
+          <div>Your Assets folder <b>{lib.pending.split(/[\\/]/).filter(Boolean).pop()}</b> is not connected right now.</div>
+          <button class="btn primary" onClick={() => run(reconnectLibrary(), 'Assets folder reconnected')}><RefreshCw size={14} /> Reconnect</button>
+          <button class="btn ghost" onClick={() => run(chooseLibraryFolder())}>Choose another folder…</button>
+        </>
+      ) : (
+        <>
+          <div>{intro}</div>
+          <button class="btn primary" onClick={() => run(chooseLibraryFolder())}><FolderOpen size={14} /> Choose Assets Folder…</button>
+        </>
+      )}
+      {lib.error && <div style={{ color: 'var(--danger)' }}>{lib.error}</div>}
+    </div>
+  );
+}
+
 export function AssetsPanel() {
   useTick();
   const lib = library.value;
   if (!librarySupported()) return <div class="empty">The Assets library needs the desktop app (or a Chromium-based browser) to save files in a folder.</div>;
-  if (!lib.root) {
-    return (
-      <div class="empty" style={{ display: 'grid', gap: 10, justifyItems: 'center' }}>
-        <div>Keep your logos, icons, photos, textures, fonts and brand colors in one folder on your computer, organized by category. AI agents can use them through MCP.</div>
-        <button class="btn primary" onClick={() => run(chooseLibraryFolder())}><FolderOpen size={14} /> Choose Assets Folder…</button>
-        {lib.error && <div style={{ color: 'var(--danger)' }}>{lib.error}</div>}
-      </div>
-    );
-  }
+  if (!lib.root) return <ConnectFolder intro="Keep your logos, icons, photos, textures, fonts and brand colors in one folder on your computer, organized by category. AI agents can use them through MCP." />;
   const scopeBrand = brandByName(assetScope.value);
   const scope = scopeBrand?.name ?? '';
   const cats = scopeBrand ? scopeBrand.categories : lib.categories;

@@ -57,7 +57,11 @@ const KINDS: Record<string, Asset['kind']> = {
   svg: 'vector', psd: 'document', lucentedit: 'document', lucent: 'document', ttf: 'font', otf: 'font', woff: 'font', woff2: 'font',
 };
 
-export const library = signal<{ root: string | null; categories: string[]; brands: Brand[]; assets: Asset[]; palettes: Palette[]; loading: boolean; error?: string }>({
+export const library = signal<{
+  root: string | null; categories: string[]; brands: Brand[]; assets: Asset[]; palettes: Palette[]; loading: boolean; error?: string;
+  /** A remembered folder that needs a click to reconnect (browser permission, or a missing drive). */
+  pending?: string;
+}>({
   root: null, categories: [], brands: [], assets: [], palettes: [], loading: false,
 });
 
@@ -162,7 +166,25 @@ export async function chooseLibraryFolder() {
   } else if ('showDirectoryPicker' in window) {
     const h = await (window as any).showDirectoryPicker({ mode: 'readwrite', id: 'lucentedit-assets' });
     await connect(h.name, browserFS(h));
+    await handleStore('put', h).catch(() => {}); // remembered for the next visit
   } else toast('Choosing a folder needs the desktop app (or a Chromium browser)', 'error');
+}
+
+/** Browsers can't keep a folder in localStorage, but IndexedDB can hold its handle. */
+function handleStore(op: 'get' | 'put' | 'delete', value?: unknown): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const open = indexedDB.open('lucentedit', 1);
+    open.onupgradeneeded = () => open.result.createObjectStore('handles');
+    open.onerror = () => reject(open.error);
+    open.onsuccess = () => {
+      const tx = open.result.transaction('handles', op === 'get' ? 'readonly' : 'readwrite');
+      const store = tx.objectStore('handles');
+      const req = op === 'get' ? store.get('library') : op === 'put' ? store.put(value, 'library') : store.delete('library');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+      tx.oncomplete = () => open.result.close();
+    };
+  });
 }
 
 /** Use a folder by path (desktop). Same as choosing it in the dialog. */
@@ -172,27 +194,54 @@ export async function useLibraryFolder(path: string) {
   try { localStorage.setItem(STORE_KEY, path); } catch { /* storage unavailable */ }
 }
 
-/** Reconnect to the folder used last time (desktop only; browsers must ask again). */
+/**
+ * Reconnect to the folder used last time. Desktop: by its path. Browser: by the handle kept in
+ * IndexedDB, at once if the browser still allows access, otherwise the panels offer a Reconnect
+ * button (the browser needs a click to ask again). A missing folder is never recreated empty.
+ */
 export async function restoreLibrary() {
-  if (!isTauri) return;
-  let root: string | null = null;
-  try { root = localStorage.getItem(STORE_KEY); } catch { /* storage unavailable */ }
-  if (root) await connect(root, tauriFS(root)).catch(() => { library.value = { ...library.value, root: null, error: `Couldn't open ${root}` }; });
+  if (isTauri) {
+    let root: string | null = null;
+    try { root = localStorage.getItem(STORE_KEY); } catch { /* storage unavailable */ }
+    if (!root) return;
+    await connect(root, tauriFS(root), false).catch(() => {
+      library.value = { ...library.value, root: null, pending: root!, error: `Couldn't open ${root}. If it's on an external drive, connect it and press Reconnect.` };
+    });
+    return;
+  }
+  if (!('showDirectoryPicker' in window)) return;
+  const h = await handleStore('get').catch(() => null);
+  if (!h) return;
+  const perm = await h.queryPermission?.({ mode: 'readwrite' }).catch(() => 'prompt');
+  if (perm === 'granted') await connect(h.name, browserFS(h), false).catch(() => { library.value = { ...library.value, pending: h.name }; });
+  else library.value = { ...library.value, pending: h.name };
+}
+
+/** Reconnect the remembered folder (call from a click: browsers only show the prompt then). */
+export async function reconnectLibrary() {
+  if (isTauri) return restoreLibrary();
+  const h = await handleStore('get').catch(() => null);
+  if (!h) { library.value = { ...library.value, pending: undefined }; return chooseLibraryFolder(); }
+  if ((await h.requestPermission({ mode: 'readwrite' })) !== 'granted') throw new Error('Access to the folder was not allowed');
+  await connect(h.name, browserFS(h), false);
 }
 
 export function disconnectLibrary() {
   fs = null;
   if (isTauri) tauriInvoke('set_library_root', { path: null }).catch(() => {});
+  else handleStore('delete').catch(() => {});
   try { localStorage.removeItem(STORE_KEY); } catch { /* storage unavailable */ }
   library.value = { root: null, categories: [], brands: [], assets: [], palettes: [], loading: false };
 }
 
-async function connect(root: string, f: LibFS) {
-  await f.mkdir(''); // creates the folder if it doesn't exist yet
+/** create: make the folder if needed (a newly chosen folder), never when reconnecting. */
+async function connect(root: string, f: LibFS, create = true) {
+  if (create) await f.mkdir('');
+  else await f.list(''); // throws if the folder is gone
   if (isTauri) await tauriInvoke('set_library_root', { path: root }); // deletes/renames stay inside it
   const top = await f.list('');
   fs = f;
-  library.value = { ...library.value, root, loading: true, error: undefined };
+  library.value = { ...library.value, root, loading: true, error: undefined, pending: undefined };
   // A brand-new folder gets the default categories so it's ready to use.
   if (!top.some((e) => e.isDir)) for (const c of DEFAULT_CATEGORIES) await f.mkdir(c);
   await refreshLibrary();
@@ -307,8 +356,14 @@ export async function deleteBrand(name: string) {
   await refreshLibrary();
 }
 
-const need = () => { if (!fs) throw new Error('No Assets folder is set. Choose one in the Assets panel (Window > Assets).'); return fs; };
+const need = () => {
+  if (fs) return fs;
+  const p = library.value.pending;
+  throw new Error(p ? `The Assets folder "${p}" is not connected right now. Ask the user to press Reconnect in the Assets panel (Window > Assets).` : 'No Assets folder is set. Choose one in the Assets panel (Window > Assets).');
+};
 const safeName = (s: string) => s.trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/^\.+/, '').slice(0, 120) || 'Untitled';
+/** Throws a helpful error when no folder is connected (for MCP tools). */
+export const needLibrary = () => void need();
 export const findAsset = (idOrName: string) => {
   const q = idOrName.toLowerCase();
   return library.value.assets.find((a) => a.id.toLowerCase() === q) ?? library.value.assets.find((a) => a.name.toLowerCase() === q || a.file.toLowerCase() === q);

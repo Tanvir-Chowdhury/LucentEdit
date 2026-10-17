@@ -3,7 +3,7 @@ import { signal } from '@preact/signals';
 import { Plus, Trash2, Star, FolderOpen, Pencil, Type, Wand2 } from 'lucide-preact';
 import { fg, toast, selectedLayers, commit, touch, useTick, textOpts } from '../core/store';
 import {
-  library, chooseLibraryFolder, createBrand, updateBrand, renameBrand, deleteBrand, activeBrand, setActiveBrand,
+  library, createBrand, updateBrand, renameBrand, deleteBrand, activeBrand, setActiveBrand,
   brandByName, categoryLabel, Brand, BrandColor, BrandFont,
 } from '../core/library';
 import { fontWeights } from '../core/fonts';
@@ -12,7 +12,7 @@ import { cssFamily } from '../core/render';
 import { FontPicker } from './FontPicker';
 import { Swatch } from './controls';
 import { askConfirm, askText } from './dialogs';
-import { assetScope, assetCategory } from './AssetsPanel';
+import { assetScope, assetCategory, ConnectFolder } from './AssetsPanel';
 import { ui } from './psCommands';
 import { TrainingSection } from './TrainingPanel';
 
@@ -143,14 +143,7 @@ export function BrandsPanel() {
   useTick();
   const lib = library.value;
   const [, force] = useState(0);
-  if (!lib.root) {
-    return (
-      <div class="empty" style={{ display: 'grid', gap: 10, justifyItems: 'center' }}>
-        <div>Brands live in your Assets folder. Choose one to manage brand kits: colors, fonts, logos and guidelines.</div>
-        <button class="btn primary" onClick={() => run(chooseLibraryFolder())}><FolderOpen size={14} /> Choose Assets Folder…</button>
-      </div>
-    );
-  }
+  if (!lib.root) return <ConnectFolder intro="Brands live in your Assets folder. Choose one to manage brand kits: colors, fonts, logos and guidelines." />;
   const current = brandByName(editing.value) ?? brandByName(activeBrand.value) ?? lib.brands[0];
   return (
     <div class="assets">

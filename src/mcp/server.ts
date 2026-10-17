@@ -509,7 +509,7 @@ const TOOLS: ToolDef[] = [
     inputSchema: { type: 'object', properties: {} },
     run: async () => {
       const L = await import('../core/library');
-      if (!L.library.value.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets or Brands panel.');
+      L.needLibrary();
       await L.refreshLibrary();
       return {
         active: L.activeBrand.value,
@@ -666,7 +666,7 @@ const TOOLS: ToolDef[] = [
     run: async (a) => {
       const L = await import('../core/library');
       const lib = L.library.value;
-      if (!lib.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets panel (Window > Assets).');
+      L.needLibrary();
       await L.refreshLibrary();
       const q = String(a.query ?? '').toLowerCase();
       const brandQ = a.brand == null ? null : String(a.brand).toLowerCase();
@@ -717,7 +717,7 @@ const TOOLS: ToolDef[] = [
     run: async (a) => {
       need(cur());
       const L = await import('../core/library');
-      if (!L.library.value.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets panel.');
+      L.needLibrary();
       const b = a.brand ? L.brandByName(String(a.brand)) : undefined;
       if (a.brand && !b) throw new Error(`Brand "${a.brand}" not found`);
       const x = await L.saveLayersAsAsset(b ? `${L.BRANDS_DIR}/${b.name}/${a.category}` : String(a.category), String(a.name), a.format ?? 'png', a.layer_ids);
@@ -730,7 +730,7 @@ const TOOLS: ToolDef[] = [
     inputSchema: { type: 'object', required: ['action'], properties: { action: { type: 'string', enum: ['create_category', 'tag', 'rename', 'delete', 'save_palette', 'delete_palette'] }, name: { type: 'string' }, asset: { type: 'string' }, tags: { type: 'array', items: { type: 'string' } }, description: { type: 'string' }, colors: { type: 'array', items: { type: 'string' } } } },
     run: async (a) => {
       const L = await import('../core/library');
-      if (!L.library.value.root) throw new Error('No Assets folder is set. Ask the user to choose one in the Assets panel.');
+      L.needLibrary();
       const asset = () => { const x = L.findAsset(String(a.asset ?? '')); if (!x) throw new Error(`Asset "${a.asset}" not found`); return x; };
       if (a.action === 'create_category') await L.createCategory(String(a.name));
       else if (a.action === 'tag') await L.setAssetInfo(asset(), { tags: a.tags, description: a.description });
