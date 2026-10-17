@@ -13,12 +13,16 @@ export interface RawEl {
   role?: string;
   x: number; y: number; w: number; h: number;
   text?: string; size?: number; family?: string; weight?: number; fill?: string; align?: string;
+  /** Corner radius of a shape, in px. */
+  radius?: number;
 }
 /** A layer with its role, box normalized to 0..1 of the canvas, size as a fraction of canvas height. */
 export interface El {
   role: Role;
   x: number; y: number; w: number; h: number;
   family?: string; size?: number; weight?: number; words?: number; upper?: boolean; fill?: string; align?: string;
+  /** Corner radius as a share of the shape's height (0.5 = pill). */
+  radius?: number;
 }
 export interface Swatch { hex: string; share: number }
 export interface Facts {
@@ -107,6 +111,7 @@ export function inferRoles(raw: RawEl[], W: number, H: number): El[] {
       role: explicit ?? named ?? 'graphic', fixed: !!(explicit ?? named), type: r.type, text: r.text,
       x: r.x / W, y: r.y / H, w: r.w / W, h: r.h / H,
       family: r.family, size: r.size != null ? r.size / H : undefined, weight: r.weight, fill: r.fill, words, align: r.align,
+      radius: r.radius != null && r.h > 0 ? Math.min(0.5, r.radius / r.h) : undefined,
       upper: r.text ? r.text === r.text.toUpperCase() && /[A-Z]/.test(r.text) : undefined,
     };
   });
@@ -176,6 +181,8 @@ export interface Profile {
     logoRate: number; logoSpot?: { spot: Spot; share: number };
     headlineSpot?: { spot: Spot; share: number };
     ctaRate: number; photoRate: number;
+    /** Button corner radius as a share of its height (0.5 = pill). */
+    ctaRadius?: number;
   };
   archetypes: Archetype[];
   summary: string[];
@@ -195,11 +202,13 @@ function mode<T extends string>(xs: T[]): { value: T; share: number } | undefine
   return { value, share: round(n / xs.length) };
 }
 
-/** Distance from the nearest canvas edge to the content (ignores full-bleed elements). */
+/** Distance from the nearest canvas edge to the content, as a fraction of the canvas's short
+ *  side (so the same 86 px margin reads the same on a square and on a tall story). */
 export function marginOf(f: Facts) {
   const inner = f.elements.filter((e) => e.role !== 'background' && area(e) < 0.6);
   if (!inner.length) return undefined;
-  return round(Math.max(0, Math.min(...inner.map((e) => Math.min(e.x, e.y, 1 - e.x - e.w, 1 - e.y - e.h)))));
+  const W = f.width, H = f.height, s = Math.min(W, H);
+  return round(Math.max(0, Math.min(...inner.map((e) => Math.min(e.x * W, e.y * H, (1 - e.x - e.w) * W, (1 - e.y - e.h) * H) / s))));
 }
 /** Share of the canvas not covered by any element except the background (20×20 grid). */
 export function whitespaceOf(f: Facts) {
@@ -216,7 +225,8 @@ const bodyOf = (f: Facts) => f.elements.filter((e) => e.role === 'body').sort((a
 
 /** Learns the brand's style. Approved work drives everything; inspiration adds layout ideas only
  *  (it is someone else's work, so never its colors or fonts); avoid lists colors to stay away from. */
-export function buildProfile(all: Facts[]): Profile {
+/** brandColors: the brand kit's colors, which can never become colors to avoid. */
+export function buildProfile(all: Facts[], brandColors: string[] = []): Profile {
   const approved = all.filter((f) => f.bucket === 'approved');
   const insp = all.filter((f) => f.bucket === 'inspiration');
   const avoid = all.filter((f) => f.bucket === 'avoid');
@@ -231,7 +241,7 @@ export function buildProfile(all: Facts[]): Profile {
   }
   const palette = pool.sort((a, b) => b.share - a.share).slice(0, 8).map((s) => ({ hex: s.hex, share: round(s.share) }));
   const avoidColors = [...new Set(avoid.flatMap((f) => f.palette.filter((s) => s.share >= 0.12).map((s) => s.hex)))]
-    .filter((c) => !palette.some((p) => colorDist(p.hex, c) < 90)).slice(0, 6);
+    .filter((c) => ![...palette.map((p) => p.hex), ...brandColors].some((k) => colorDist(k, c) < 90)).slice(0, 6);
 
   const lums = approved.map((f) => f.luminance);
   const light = lums.filter((l) => l >= 0.55).length, dark = lums.filter((l) => l < 0.45).length;
@@ -275,6 +285,7 @@ export function buildProfile(all: Facts[]): Profile {
       logoSpot: logoSpot && { spot: logoSpot.value, share: logoSpot.share },
       headlineSpot: headSpot && { spot: headSpot.value, share: headSpot.share },
       ctaRate: rate('cta'), photoRate: rate('photo'),
+      ctaRadius: median(typeSet.flatMap((f) => f.elements.filter((e) => e.role === 'cta' && e.radius != null).map((e) => e.radius!))),
     },
     archetypes: archetypesOf(layoutSet),
     summary: [],
@@ -320,7 +331,7 @@ function summarize(p: Profile): string[] {
   if (l.margin != null) s.push(`Margins about ${pct(l.margin)} of the canvas; about ${pct(l.whitespace ?? 0)} left empty.`);
   if (l.logoSpot) s.push(`Logo in ${pct(l.logoRate)} of designs, usually ${l.logoSpot.spot.replace('-', ' ')}.`);
   if (l.headlineSpot) s.push(`Headline usually ${l.headlineSpot.spot.replace('-', ' ')}.`);
-  if (l.ctaRate) s.push(`A call-to-action button in ${pct(l.ctaRate)} of designs; a photo in ${pct(l.photoRate)}.`);
+  if (l.ctaRate) s.push(`A call-to-action button in ${pct(l.ctaRate)} of designs${l.ctaRadius != null ? ` (${l.ctaRadius >= 0.45 ? 'pill-shaped' : l.ctaRadius < 0.05 ? 'square corners' : 'rounded corners'})` : ''}; a photo in ${pct(l.photoRate)}.`);
   const fm = Object.entries(p.formats).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`);
   if (fm.length) s.push(`Formats: ${fm.join(', ')}.`);
   return s;
@@ -341,8 +352,15 @@ export function scoreFit(f: Facts, p: Profile, brand: { colors: string[]; fonts:
     const off = f.palette.filter((s) => s.share >= 0.04 && !allowed.some((c) => colorDist(c, s.hex) < 70)).map((s) => s.hex);
     checks.push({ id: 'palette', label: 'Brand colors', ok: share >= 0.75, partial: share, weight: 4, detail: share >= 0.75 ? `${pct(share)} of the design uses brand colors` : `Only ${pct(share)} uses brand colors; off-brand: ${off.join(', ')}` });
   }
+  // Text and shape colors count even when they cover little area (neon text on white is off-brand).
+  const fills = [...new Set(f.elements.filter((e) => e.fill && e.role !== 'logo' && parseHex(e.fill)).map((e) => e.fill!.toLowerCase()))];
+  if (allowed.length && fills.length) {
+    const off = fills.filter((c) => !allowed.some((a) => colorDist(a, c) < 70) && !/^#(f{3}|f{6}|0{3}|0{6})$/.test(c));
+    checks.push({ id: 'fills', label: 'Text and shape colors', ok: !off.length, weight: 2, detail: off.length ? `Not brand colors: ${off.join(', ')}` : 'Text and shapes use brand colors' });
+  }
   if (p.avoidColors.length) {
-    const hit = f.palette.filter((s) => s.share >= 0.04 && p.avoidColors.some((c) => colorDist(c, s.hex) < 60)).map((s) => s.hex);
+    const hit = [...new Set([...f.palette.filter((s) => s.share >= 0.04).map((s) => s.hex), ...fills])]
+      .filter((h) => p.avoidColors.some((c) => colorDist(c, h) < 60) && !brand.colors.some((c) => colorDist(c, h) < 60)); // the brand kit wins
     checks.push({ id: 'avoid', label: 'No avoided colors', ok: !hit.length, weight: 2, detail: hit.length ? `Uses ${hit.join(', ')}, which appears in Avoid examples` : 'None of the avoided colors are used' });
   }
   const fonts = [...brand.fonts, ...p.type.families.map((x) => x.family)].map((x) => x.toLowerCase());

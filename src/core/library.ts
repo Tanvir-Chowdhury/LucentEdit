@@ -270,6 +270,7 @@ async function writeBrandFile(b: Brand) {
 
 export async function createBrand(name: string, kit: Partial<Omit<Brand, 'name' | 'categories'>> = {}) {
   const f = need(), n = safeName(name);
+  await refreshLibrary(); // the folder may have changed outside the app
   if (brandByName(n)) throw new Error(`Brand "${n}" already exists`);
   for (const c of BRAND_CATEGORIES) await f.mkdir(join(BRANDS_DIR, n, c));
   for (const c of Object.values(TRAINING_BUCKETS)) await f.mkdir(join(BRANDS_DIR, n, TRAINING_DIR, c));

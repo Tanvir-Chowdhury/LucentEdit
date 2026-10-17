@@ -34,7 +34,7 @@ export const brandStyles = signal<Record<string, StyleFile | null>>({});
 const stylePath = (brand: string) => `${BRANDS_DIR}/${brand}/${TRAINING_DIR}/style.json`;
 
 /** Cache key of an example's facts: bump the version when the analysis changes. */
-export const factKey = (a: Asset) => `v2:${a.modified}:${a.size}:${a.training}`;
+export const factKey = (a: Asset) => `v3:${a.modified}:${a.size}:${a.training}`;
 
 export const trainingItems = (brand: string, bucket?: Bucket) =>
   library.value.assets.filter((a) => a.brand === brand && a.training && (!bucket || a.training === bucket));
@@ -56,7 +56,7 @@ function rawElements(layers: Layer[]): RawEl[] {
       const box = { name: l.name, role: l.role, x: l.x, y: l.y, w: l.w, h: l.h };
       if (l.type === 'group' && !l.role && !/logo|button|cta|badge/i.test(l.name)) walk(l.children);
       else if (l.type === 'text') out.push({ ...box, type: 'text', text: l.text, size: l.size, family: l.family, weight: l.weight, align: l.align, fill: typeof l.fill === 'string' ? l.fill : undefined });
-      else if (l.type === 'shape') out.push({ ...box, type: 'shape', fill: typeof l.fill === 'string' ? l.fill : undefined });
+      else if (l.type === 'shape') out.push({ ...box, type: 'shape', fill: typeof l.fill === 'string' ? l.fill : undefined, radius: l.shape === 'rect' ? l.radius ?? 0 : undefined });
       else out.push({ ...box, type: 'image' });
     }
   };
@@ -120,7 +120,7 @@ export async function retrainBrand(name?: string, onProgress?: (done: number, to
     try { facts[a.id] = { ...(await factsFromAsset(a)), key }; } catch { skipped.push(a.file); }
   }
   onProgress?.(items.length, items.length);
-  const profile = buildProfile(Object.values(facts));
+  const profile = buildProfile(Object.values(facts), b.colors.map((c) => c.hex));
   if (skipped.length) profile.summary.push(`Couldn't read: ${skipped.join(', ')}.`);
   const style: StyleFile = { version: 1, brand: b.name, updated: new Date().toISOString(), profile, facts };
   await writeLibraryText(stylePath(b.name), JSON.stringify(style, null, 1));
@@ -235,7 +235,8 @@ export async function recreateLayout(name: string | undefined, opts: { layout?: 
   const ds = openDocState(createDoc({ name: `${b.name} ${arch.format}`, width: W, height: H, background: bg }), `Recreate ${b.name} layout`);
   const head = b.fonts.heading ?? b.fonts.body, body = b.fonts.body ?? b.fonts.heading;
   const headSize = (p.type.headlineSize ?? 0.08) * H;
-  const bodySize = Math.max(10, headSize / (p.type.headlineToBody ?? 2.6));
+  // Floor on the short side, so wide banners don't get unreadably small body text.
+  const bodySize = Math.max(10, 0.022 * Math.min(W, H), headSize / (p.type.headlineToBody ?? 2.6));
   const upper = (p.type.uppercaseHeadlines ?? 0) >= 0.5;
   const logo = library.value.assets.find((a) => a.brand === b.name && !a.training && /\/Logos$/.test(a.category) && a.kind !== 'font' && a.kind !== 'other');
   const box = (sl: Archetype['slots'][number]) => ({ x: Math.round(sl.x * W), y: Math.round(sl.y * H), w: Math.max(4, Math.round(sl.w * W)), h: Math.max(4, Math.round(sl.h * H)) });
@@ -269,7 +270,7 @@ export async function recreateLayout(name: string | undefined, opts: { layout?: 
         } else add(newShape({ shape: 'rect', ...r, fill: null, stroke: { paint: ink, width: 2, dash: [6, 4] } }), 'logo', 'Logo slot (add a logo to the brand\'s Logos)');
         break;
       case 'cta': {
-        add(newShape({ shape: 'rect', ...r, fill: accent, stroke: null, radius: Math.min(r.h / 2, 12) }), 'cta', 'CTA button');
+        add(newShape({ shape: 'rect', ...r, fill: accent, stroke: null, radius: Math.round((p.layout.ctaRadius ?? 0.15) * r.h) }), 'cta', 'CTA button');
         const t = newText(copy, r.x, r.y, { family: body?.family ?? 'Inter Variable', weight: 700, size: Math.min(r.h * 0.42, bodySize * 1.1), fill: onAccent, align: 'center', autoWidth: false, w: r.w });
         t.y = Math.round(r.y + (r.h - t.h) / 2);
         add(t, 'cta', 'CTA label');
