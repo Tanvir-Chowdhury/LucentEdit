@@ -1,6 +1,6 @@
 {
   "name": "lucentedit-mcp",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "stdio MCP bridge for the LucentEdit design app (forwards to the app's local MCP endpoint)",
   "type": "module",
   "bin": { "lucentedit-mcp": "lucentedit-mcp.mjs" },

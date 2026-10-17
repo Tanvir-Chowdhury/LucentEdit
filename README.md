@@ -1,8 +1,9 @@
 <div align="center">
 
-<img src="public/logo.svg" alt="LucentEdit logo" width="112" height="112" />
-
-# LucentEdit
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/brand/lockup-dark.png" />
+  <img src="docs/brand/lockup-light.png" alt="LucentEdit" width="520" />
+</picture>
 
 **The free, lightweight, open-source Photoshop + Illustrator alternative, built for humans and AI agents.**
 

@@ -303,7 +303,7 @@ function AboutDialog() {
     <Dialog title="About LucentEdit" foot={<button class="btn primary" onClick={() => (dialog.value = null)}>Close</button>}>
       <div class="hero" style={{ marginBottom: 12 }}>
         <img src="/logo.svg" style={{ width: 56, height: 56, borderRadius: 14 }} />
-        <div><h1 style={{ fontSize: 22 }}><span>LucentEdit</span> 0.7.0</h1><p>Free, open-source image editor and vector design tool with a built-in MCP server.</p></div>
+        <div><h1 style={{ fontSize: 22 }}><span>LucentEdit</span> 0.7.1</h1><p>Free, open-source image editor and vector design tool with a built-in MCP server.</p></div>
       </div>
       <p style={{ color: 'var(--text-2)', lineHeight: 1.6 }}>No accounts, no subscriptions, no telemetry. Your files stay on your computer. Licensed under MIT.</p>
     </Dialog>

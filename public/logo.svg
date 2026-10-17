@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
-  <rect x="64" y="64" width="896" height="896" rx="200" fill="#1d1d21"/>
-  <rect x="66" y="66" width="892" height="892" rx="198" fill="none" stroke="#ffffff" stroke-opacity="0.12" stroke-width="4"/>
-  <!-- a prism splitting one beam: light in, color out -->
-  <path d="M512 262 L746 694 L278 694 Z" fill="none" stroke="#f4f4f6" stroke-width="52" stroke-linejoin="round"/>
-  <path d="M176 520 L424 474" stroke="#f4f4f6" stroke-width="28" stroke-linecap="round"/>
-  <path d="M616 478 L852 432" stroke="#3d84f7" stroke-width="28" stroke-linecap="round"/>
+  <title>LucentEdit</title>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="#141417"/>
+  <rect x="65.5" y="65.5" width="893" height="893" rx="206.5" fill="none" stroke="#ffffff" stroke-opacity="0.10" stroke-width="3"/>
+  <!-- Two translucent layers form the L; where they overlap, the light shows through -->
+  <rect x="288" y="236" width="184" height="552" rx="52" fill="#ffffff" fill-opacity="0.40"/>
+  <rect x="288" y="604" width="448" height="184" rx="52" fill="#ffffff" fill-opacity="0.40"/>
+  <rect x="288" y="604" width="184" height="184" rx="52" fill="#3d84f7"/>
 </svg>

@@ -230,18 +230,13 @@
     "semantic_hash": ""
   },
   "README.md": {
-    "mtime": 1791993782.690342,
-    "ast_hash": "aaea2d8768a3a8685823816edffd7cd8",
+    "mtime": 1791994756.6800802,
+    "ast_hash": "bea5daa1e98849523466c70d7ae249ea",
     "semantic_hash": ""
   },
   "index.html": {
     "mtime": 1791881673.948207,
     "ast_hash": "753772e8d6252f86fd2cc861e2736b15",
-    "semantic_hash": ""
-  },
-  "docs/hero.png": {
-    "mtime": 1791882837.5065548,
-    "ast_hash": "f91aad4f8294e9a5ca1c384a4a858741",
     "semantic_hash": ""
   },
   "public/logo.svg": {
@@ -620,8 +615,8 @@
     "semantic_hash": ""
   },
   "src/core/library.ts": {
-    "mtime": 1791993309.464833,
-    "ast_hash": "ed38113ff59eb6ae17d1070d60e0c4be",
+    "mtime": 1792260850.3559825,
+    "ast_hash": "1b25a4e3ac3665858a5707e1a516087d",
     "semantic_hash": ""
   },
   "src/ui/AssetsPanel.tsx": {
@@ -645,18 +640,18 @@
     "semantic_hash": ""
   },
   "src/core/training-analyze.ts": {
-    "mtime": 1791993664.464877,
-    "ast_hash": "82c6faf00dc330d4b37ea9f5a4b2169d",
+    "mtime": 1792260981.1776495,
+    "ast_hash": "8c7d190c0aebba681de63d679773c3fb",
     "semantic_hash": ""
   },
   "src/core/training.check.ts": {
-    "mtime": 1791993288.8775868,
-    "ast_hash": "dbf6458dee5598d10b8e44d567f40661",
+    "mtime": 1792260981.1786785,
+    "ast_hash": "a0ec88e8df4af018aab42d790ff74381",
     "semantic_hash": ""
   },
   "src/core/training.ts": {
-    "mtime": 1791993682.283207,
-    "ast_hash": "45032b523871285a10f2bec43a7203b4",
+    "mtime": 1792260981.1781726,
+    "ast_hash": "4b54632b57690e24f10e3cc3778e0aaf",
     "semantic_hash": ""
   },
   "src/ui/TrainingPanel.tsx": {
@@ -667,6 +662,41 @@
   "ROADMAP.md": {
     "mtime": 1791993816.9995992,
     "ast_hash": "65fa679229c3bb9a425b4f241bf8c36e",
+    "semantic_hash": ""
+  },
+  "docs/screenshots/brand-training.png": {
+    "mtime": 1791994744.8980267,
+    "ast_hash": "c4ed134882312b7fb3c44f48e3f7a237",
+    "semantic_hash": ""
+  },
+  "docs/screenshots/editor.png": {
+    "mtime": 1791994738.089958,
+    "ast_hash": "54df2fb39ed4bd58e2795d1e2822dfac",
+    "semantic_hash": ""
+  },
+  "docs/screenshots/home.png": {
+    "mtime": 1791994736.275735,
+    "ast_hash": "5f2502a3648c8546965b9c0c76f28504",
+    "semantic_hash": ""
+  },
+  "docs/screenshots/mcp.png": {
+    "mtime": 1791994740.501878,
+    "ast_hash": "0540dd522c4cf638d46ac790607d612a",
+    "semantic_hash": ""
+  },
+  "docs/screenshots/menus.png": {
+    "mtime": 1791994739.2268348,
+    "ast_hash": "a91af0c9e25ece7fd66db3c042e97736",
+    "semantic_hash": ""
+  },
+  "docs/marketing/bangla-developer-explainer-5min.md": {
+    "mtime": 1792179150.3021126,
+    "ast_hash": "ced298fb29a711e1cdc38b491dc2a740",
+    "semantic_hash": ""
+  },
+  "docs/marketing/bangla-motion-video-script.md": {
+    "mtime": 1792179167.6377912,
+    "ast_hash": "9736d7058c2ef221f0b907f0a6d21a7e",
     "semantic_hash": ""
   }
 }

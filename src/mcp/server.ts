@@ -936,7 +936,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.7.0' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.7.1' },
         instructions: GUIDE,
       });
     }
