@@ -9,6 +9,7 @@ import { createDoc } from './store';
 import { shapeToPaths, pathsToD, parseSvgPath, mapPaths, normalizePaths } from './paths';
 import { newRaster, newText } from './ops';
 import { psFontToCss, cssToPsFont, cssToRgb, pdfToSvg, docToPdf } from './pdf';
+import { psdShapeIn, psdShapeOut, psdAdjustIn, psdAdjustOut, psdEffectsIn, psdEffectsOut } from './psdx';
 
 // Files: native .lucentedit, PSD (via ag-psd), SVG import/export, raster images, and the
 // desktop (Tauri) / browser file access layer.
@@ -176,6 +177,15 @@ async function readPsdDoc(f: OpenedFile): Promise<Doc> {
     const common: any = { id: uid(), name: l.name ?? 'Layer', visible: !l.hidden, locked: false, opacity: l.opacity ?? 1, blend: psdBlendIn(l.blendMode), rotation: 0 };
     if (l.clipping) common.clip = true;
     if (l.mask?.canvas) common.mask = psdMaskIn(l.mask, psd.width, psd.height);
+    const fx = psdEffectsIn(l.effects);
+    if (fx) common.effects = fx;
+    // Adjustment layers stay adjustable; shape layers stay editable vectors.
+    if (l.adjustment) {
+      const a = psdAdjustIn(l.adjustment);
+      if (a) return { ...common, type: 'adjust', ...a, x: 0, y: 0, w: psd.width, h: psd.height } as Layer;
+    }
+    const shape = psdShapeIn(l);
+    if (shape) return { ...common, ...shape } as Layer;
     if (l.children) {
       const g: GroupLayer = { ...common, type: 'group', children: conv(l.children), expanded: !!l.opened, x: 0, y: 0, w: 1, h: 1 };
       return g.children.length ? g : null;
@@ -236,6 +246,16 @@ function psdTextOut(t: TextLayer) {
   };
 }
 
+/** Our alpha mask as a Photoshop grayscale mask (white reveals) covering the document. */
+function psdMaskOut(m: NonNullable<Layer['mask']>, doc: Doc) {
+  const c = makeCanvas(doc.width, doc.height), x = ctx2d(c);
+  x.drawImage(m.canvas, m.x, m.y);
+  const img = x.getImageData(0, 0, doc.width, doc.height);
+  for (let i = 0; i < img.data.length; i += 4) { const a = img.data[i + 3]; img.data[i] = img.data[i + 1] = img.data[i + 2] = a; img.data[i + 3] = 255; }
+  x.putImageData(img, 0, 0);
+  return { canvas: c, left: 0, top: 0, defaultColor: 0, disabled: !m.enabled };
+}
+
 /** PSD masks are grayscale images over a default color; ours are alpha masks in doc space. */
 function psdMaskIn(m: any, W: number, H: number) {
   const c = makeCanvas(W, H), x = ctx2d(c);
@@ -253,8 +273,16 @@ function psdMaskIn(m: any, W: number, H: number) {
 export async function writePsdBytes(doc: Doc): Promise<Uint8Array> {
   const { writePsd } = await import('ag-psd');
   const conv = (ls: Layer[]): any[] => ls.map((l) => {
-    const common = { name: l.name, hidden: !l.visible, opacity: l.opacity, blendMode: l.blend.replace(/-/g, ' '), clipping: !!l.clip };
+    const common: any = { name: l.name, hidden: !l.visible, opacity: l.opacity, blendMode: l.blend.replace(/-/g, ' '), clipping: !!l.clip };
     if (l.type === 'group') return { ...common, opened: l.expanded, children: conv(l.children) };
+    if (l.type === 'adjust') {
+      const adjustment = psdAdjustOut(l);
+      if (adjustment) return { ...common, adjustment };
+    }
+    // Effects and masks are written as Photoshop effects and masks, so the pixels below are drawn without them.
+    const effects = psdEffectsOut(l.effects);
+    if (effects) { common.effects = effects; l = { ...l, effects: undefined } as Layer; }
+    if (l.mask) { common.mask = psdMaskOut(l.mask, doc); l = { ...l, mask: undefined } as Layer; }
     // Render each layer with effects into document space, then crop to its bounds.
     const full = renderLayerToDocCanvas(doc, l);
     const b = layerBoundsPx(l, doc);
@@ -262,7 +290,8 @@ export async function writePsdBytes(doc: Doc): Promise<Uint8Array> {
     const c = makeCanvas(b.w, b.h);
     ctx2d(c).drawImage(full, -b.x, -b.y);
     const text = l.type === 'text' ? psdTextOut(l) : undefined;
-    return { ...common, canvas: c, left: b.x, top: b.y, ...(text ? { text } : {}) };
+    const vector = l.type === 'shape' ? psdShapeOut(l) : undefined;
+    return { ...common, canvas: c, left: b.x, top: b.y, ...(text ? { text } : {}), ...(vector ?? {}) };
   });
   const psd = { width: doc.width, height: doc.height, canvas: flatten(doc), children: conv(doc.layers) };
   // invalidateTextLayers: Photoshop re-renders text layers on open, so they stay editable.
@@ -388,9 +417,10 @@ export async function importSvg(text: string): Promise<{ layers: Layer[]; width:
         if (tag === 'g' || tag === 'a' || tag === 'svg') {
           const kids: Layer[] = [];
           await walkEl(child, kids);
-          if (kids.length === 1) into.push(kids[0]);
+          // data-keep: a named layer from an .ai file stays a group even with one item.
+          if (kids.length === 1 && !child.hasAttribute('data-keep')) into.push(kids[0]);
           else if (kids.length) {
-            const g: GroupLayer = { id: uid(), name: child.getAttribute('id') || child.getAttribute('data-name') || 'Group', type: 'group', children: kids, expanded: false, visible: true, locked: false, opacity: parseFloat(cs.opacity) || 1, blend: 'normal', x: 0, y: 0, w: 1, h: 1, rotation: 0 };
+            const g: GroupLayer = { id: uid(), name: child.getAttribute('id') || child.getAttribute('data-name') || 'Group', type: 'group', children: kids, expanded: false, visible: !child.hasAttribute('data-hidden'), locked: false, opacity: parseFloat(cs.opacity) || 1, blend: 'normal', x: 0, y: 0, w: 1, h: 1, rotation: 0 };
             into.push(g);
           }
           continue;

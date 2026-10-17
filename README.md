@@ -104,7 +104,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 | **Filters** | 50+ filters in Photoshop's submenus: Blur (Average, Blur, Blur More, Box, Gaussian, Motion, Radial, Surface), Distort (Pinch, Polar Coordinates, Ripple, Spherize, Twirl, Wave, ZigZag), Noise (Add Noise, Despeckle, Dust & Scratches, Median, Reduce Noise), Pixelate (Color Halftone, Crystallize, Facet, Fragment, Mezzotint, Mosaic, Pointillize), Render (Clouds, Difference Clouds, Fibers, Lens Flare, Vignette), Sharpen (Sharpen, Sharpen More, Sharpen Edges, Smart Sharpen, Unsharp Mask), Stylize (Diffuse, Emboss, Find Edges, Oil Paint, Solarize, Tiles, Trace Contour, Wind), Other (High Pass, Maximum, Minimum, Offset). Live preview, limited to the selection, Last Filter |
 | **Layout** | Align and distribute |
 | **History** | History panel with undo/redo |
-| **Import / export** | **Photoshop `.psd`**: open and save with layers, groups, masks, blend modes, and editable text layers. **Illustrator `.ai`** (PDF-compatible, Illustrator's default): open as editable vector shapes and live text with fonts and colors, and save `.ai` files Illustrator opens as editable artwork. Also PDF in and out, SVG as editable vectors, PNG / JPG / WebP (0.25× to 4×), and `.lucentedit` |
+| **Import / export** | **Photoshop `.psd`**, layer by layer both ways: groups, pixel layers, layer masks, blend modes, opacity, clipping, **editable text layers**, **shape layers as editable vectors** (fill and stroke), **adjustment layers** (Brightness/Contrast, Levels, Curves, Exposure, Vibrance, Hue/Saturation, Black & White, Invert, Posterize, Threshold) and **drop shadow / outer glow effects**. **Illustrator `.ai`** (PDF-compatible, Illustrator's default): opens with its **layers as named groups**, groups and clip groups nested inside, every path an editable vector and every text live text with its font and color; saves `.ai` files Illustrator opens as editable artwork. Also PDF in and out, SVG as editable vectors, PNG / JPG / WebP (0.25× to 4×), and `.lucentedit` |
 | **Navigation** | Hand (or hold Space), Zoom, Ctrl+wheel zoom at cursor, fit to screen, 100% view, rulers, grid |
 | **UX** | Premium dark UI with Photoshop's menus, toolbar groups and default keyboard shortcuts, Edit > Fill and Stroke dialogs, command search (Ctrl+F), scrubbable number fields that accept math (`120*2`), color picker with recent colors |
 | **AI** | Built-in MCP server (Streamable HTTP) plus a stdio bridge for every MCP client |
@@ -467,8 +467,8 @@ Layers panel: `Ctrl`-click a thumbnail to load it as a selection (`Shift` adds, 
 | Swatches / Fill & Stroke | Fill (solid, linear, radial) and Stroke (dash, cap, join) |
 | History palette | History panel |
 | Align panel | Align & distribute |
-| `.psd` | Open and save with layers, masks and editable text; native format is `.lucentedit` |
-| `.ai` | Open (PDF-compatible files, Illustrator's default) and save with editable vectors and live text |
+| `.psd` | Open and save layer by layer: groups, masks, editable text, vector shapes, adjustment layers, effects |
+| `.ai` | Open with Illustrator's layers and groups, editable vectors and live text; save editable `.ai` |
 
 ## Build from source
 

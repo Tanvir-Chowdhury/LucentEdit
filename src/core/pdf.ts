@@ -39,8 +39,22 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
   const base = vp.transform as M6;
   const ops = await page.getOperatorList();
   const { OPS } = pdfjs;
-  const out: string[] = [];
   const defs: string[] = [];
+  // Layer tree: Illustrator layers (optional content), groups (q..Q, forms) and clip groups become
+  // nested <g>s that importSvg turns into Group layers (single-item wrappers are unwrapped there).
+  type Node = { kind: 'q' | 'mc' | 'form'; name?: string; keep?: boolean; hidden?: boolean; items: string[] };
+  const tree: Node[] = [{ kind: 'mc', items: [] }];
+  const emit = (x: string) => tree[tree.length - 1].items.push(x);
+  const open = (kind: Node['kind'], extra: Partial<Node> = {}) => tree.push({ kind, items: [], ...extra });
+  const close = (kind: Node['kind']) => {
+    const i = tree.map((t) => t.kind).lastIndexOf(kind);
+    if (i <= 0) return;
+    while (tree.length > i) {
+      const c = tree.pop()!, body = c.items.join('');
+      if (body) tree[tree.length - 1].items.push(`<g data-name="${escXml(c.name ?? 'Group')}"${c.keep ? ' data-keep="1"' : ''}${c.hidden ? ' data-hidden="1"' : ''}>${body}</g>`);
+    }
+  };
+  const oc = await pdf.getOptionalContentConfig().catch(() => null);
   type St = { ctm: M6; fill: string; stroke: string; fa: number; sa: number; lw: number; cap: number; join: number; dash: number[]; fillPat?: string; clip?: { d: string; box: Box }; font?: string; size: number; leading: number };
   let st: St = { ctm: [1, 0, 0, 1, 0, 0], fill: '#000000', stroke: '#000000', fa: 1, sa: 1, lw: 1, cap: 0, join: 0, dash: [], size: 12, leading: 0 };
   const stack: St[] = [];
@@ -89,8 +103,16 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
   for (let i = 0; i < ops.fnArray.length; i++) {
     const fn = ops.fnArray[i], a = ops.argsArray[i] as any[];
     switch (fn) {
-      case OPS.save: stack.push({ ...st, dash: [...st.dash] }); break;
-      case OPS.restore: st = stack.pop() ?? st; break;
+      case OPS.save: stack.push({ ...st, dash: [...st.dash] }); open('q'); break;
+      case OPS.restore: st = stack.pop() ?? st; close('q'); break;
+      case OPS.beginMarkedContentProps: {
+        // Illustrator's layers arrive as optional content groups: one named group per layer.
+        const g = a[0] === 'OC' && a[1]?.id ? (oc as any)?.getGroup?.(a[1].id) : null;
+        open('mc', g ? { name: g.name || 'Layer', keep: true, hidden: g.visible === false } : {});
+        break;
+      }
+      case OPS.beginMarkedContent: open('mc'); break;
+      case OPS.endMarkedContent: close('mc'); break;
       case OPS.transform: st.ctm = mul(st.ctm, a as M6); break;
       case OPS.setFillRGBColor: st.fill = hex(a); st.fillPat = undefined; break;
       case OPS.setStrokeRGBColor: st.stroke = hex(a); break;
@@ -108,8 +130,8 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
         st.fillPat = (ir ? gradient(ir as any[], mul(base, (a[2] ?? [1, 0, 0, 1, 0, 0]) as M6)) : undefined) ?? 'none';
         break;
       }
-      case OPS.paintFormXObjectBegin: stack.push({ ...st, dash: [...st.dash] }); if (a[0]) st.ctm = mul(st.ctm, Array.from(a[0] as number[]) as M6); break;
-      case OPS.paintFormXObjectEnd: st = stack.pop() ?? st; break;
+      case OPS.paintFormXObjectBegin: stack.push({ ...st, dash: [...st.dash] }); open('form'); if (a[0]) st.ctm = mul(st.ctm, Array.from(a[0] as number[]) as M6); break;
+      case OPS.paintFormXObjectEnd: st = stack.pop() ?? st; close('form'); break;
       case OPS.beginGroup: groupStack.push(groupAlpha); groupAlpha *= st.fa; st.fa = st.sa = 1; break;
       case OPS.endGroup: groupAlpha = groupStack.pop() ?? 1; break;
       case OPS.setLineWidth: st.lw = a[0]; break;
@@ -118,7 +140,7 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
       case OPS.setDash: st.dash = a[0] ?? []; break;
       case OPS.setGState: for (const [k, v] of a[0] ?? []) { if (k === 'ca') st.fa = v; if (k === 'CA') st.sa = v; if (k === 'LW') st.lw = v; } break;
       case OPS.setFont: st.font = a[0]; st.size = a[1]; break;
-      case OPS.clip: case OPS.eoClip: pendingClip = true; break;
+      case OPS.clip: case OPS.eoClip: pendingClip = true; if (tree[tree.length - 1].kind === 'q') tree[tree.length - 1].name = 'Clip Group'; break;
       case OPS.beginText: tm = tlm = [1, 0, 0, 1, 0, 0]; break;
       case OPS.setTextMatrix: tm = tlm = (Array.isArray(a[0]) || ArrayBuffer.isView(a[0]) ? Array.from(a[0] as number[]) : a) as M6; break;
       case OPS.moveText: tm = tlm = mul(tlm, [1, 0, 0, 1, a[0], a[1]]); break;
@@ -128,13 +150,14 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
       case OPS.showText: case OPS.showSpacedText: case OPS.nextLineShowText: case OPS.nextLineSetSpacingShowText: {
         if (fn === OPS.nextLineShowText || fn === OPS.nextLineSetSpacingShowText) tm = tlm = mul(tlm, [1, 0, 0, 1, 0, -st.leading]);
         const [x, y] = apply(mul(base, mul(st.ctm, tm)), 0, 0);
+        emit(`\u0000T${textRuns.length}\u0000`); // the text goes here once its string is known
         textRuns.push({ fill: st.fill, fa: st.fa * groupAlpha, font: st.font, x, y });
         break;
       }
       case OPS.shadingFill: {
         // Illustrator gradients: a clipping path, then "sh". Fill the clip with the gradient.
         const g = gradient((await objGet(page, a[0])) as any[], mul(base, st.ctm));
-        if (g && st.clip) out.push(`<path d="${st.clip.d}" fill="${g}"${st.fa * groupAlpha < 1 ? ` fill-opacity="${r2(st.fa * groupAlpha)}"` : ''}/>`);
+        if (g && st.clip) emit(`<path data-name="Gradient" d="${st.clip.d}" fill="${g}"${st.fa * groupAlpha < 1 ? ` fill-opacity="${r2(st.fa * groupAlpha)}"` : ''}/>`);
         break;
       }
       case OPS.constructPath: {
@@ -159,7 +182,7 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
           stroke && st.join ? `stroke-linejoin="${['miter', 'round', 'bevel'][st.join]}"` : '',
           stroke && st.dash.length ? `stroke-dasharray="${st.dash.map((v) => r2(v * scale)).join(' ')}"` : '',
         ].filter(Boolean).join(' ');
-        out.push(`<path d="${d}" ${attrs}/>`);
+        emit(`<path data-name="${fill && !stroke ? 'Path' : stroke && !fill ? 'Stroke' : 'Path'}" d="${d}" ${attrs}/>`);
         break;
       }
       case OPS.paintImageXObject: case OPS.paintInlineImageXObject: {
@@ -171,7 +194,7 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
         const p = [apply(m, 0, 0), apply(m, 1, 0), apply(m, 1, 1), apply(m, 0, 1)];
         const xs = p.map((q) => q[0]), ys = p.map((q) => q[1]);
         const x = Math.min(...xs), y = Math.min(...ys);
-        out.push(`<image href="${url}" x="${r2(x)}" y="${r2(y)}" width="${r2(Math.max(...xs) - x)}" height="${r2(Math.max(...ys) - y)}" preserveAspectRatio="none"${st.fa * groupAlpha < 1 ? ` opacity="${r2(st.fa * groupAlpha)}"` : ''}/>`);
+        emit(`<image data-name="Image" href="${url}" x="${r2(x)}" y="${r2(y)}" width="${r2(Math.max(...xs) - x)}" height="${r2(Math.max(...ys) - y)}" preserveAspectRatio="none"${st.fa * groupAlpha < 1 ? ` opacity="${r2(st.fa * groupAlpha)}"` : ''}/>`);
         break;
       }
     }
@@ -179,23 +202,27 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
 
   // Live text: positions from the text layer, colors and font names from the drawing ops above.
   const text = await page.getTextContent();
+  const textAt = new Map<number, string[]>();
   for (const it of text.items as any[]) {
     if (!it.str?.trim()) continue;
     const m = mul(base, it.transform as M6);
     // Nearest run on the same baseline at or before the piece's start (else simply the nearest).
-    let r = textRuns[0] ?? { fill: '#000000', fa: 1, x: 0, y: 0 }, best = Infinity;
-    for (const t of textRuns) {
+    let ri = 0, best = Infinity;
+    textRuns.forEach((t, k) => {
       const dy = Math.abs(t.y - m[5]), dx = m[4] - t.x;
       const d = dy * 4 + (dx >= -0.5 ? dx : 1000 - dx);
-      if (d < best) { best = d; r = t; }
-    }
+      if (d < best) { best = d; ri = k; }
+    });
+    const r = textRuns[ri] ?? { fill: '#000000', fa: 1, x: 0, y: 0 };
     const size = Math.hypot(m[2], m[3]);
     let fontName = '';
     try { fontName = r.font ? ((await objGet(page, r.font, true)) as any)?.name ?? '' : ''; } catch { /* unknown font */ }
     const f = fontName ? psFontToCss(fontName) : { family: text.styles[it.fontName]?.fontFamily ?? 'sans-serif', weight: 400, italic: false };
-    out.push(`<text x="${r2(m[4])}" y="${r2(m[5])}" font-family="${escXml(f.family)}" font-size="${r2(size)}" font-weight="${f.weight}"${f.italic ? ' font-style="italic"' : ''} fill="${r.fill === 'none' ? '#000000' : r.fill}"${r.fa < 1 ? ` fill-opacity="${r.fa}"` : ''}>${escXml(it.str)}</text>`);
+    textAt.set(ri, [...(textAt.get(ri) ?? []), `<text data-name="${escXml(it.str.trim().slice(0, 40))}" x="${r2(m[4])}" y="${r2(m[5])}" font-family="${escXml(f.family)}" font-size="${r2(size)}" font-weight="${f.weight}"${f.italic ? ' font-style="italic"' : ''} fill="${r.fill === 'none' ? '#000000' : r.fill}"${r.fa < 1 ? ` fill-opacity="${r.fa}"` : ''}>${escXml(it.str)}</text>`]);
   }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs>${defs.join('')}</defs>${out.join('')}</svg>`;
+  while (tree.length > 1) close(tree[tree.length - 1].kind);
+  const body = tree[0].items.join('').replace(/\u0000T(\d+)\u0000/g, (_, k) => (textAt.get(+k) ?? []).join(''));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}"><defs>${defs.join('')}</defs>${body}</svg>`;
   return { svg, pages: pdf.numPages };
 }
 

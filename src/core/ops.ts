@@ -545,6 +545,7 @@ export const layerSummary = (l: Layer): any => {
   if (l.role) o.role = l.role;
   if (l.type === 'shape') Object.assign(o, { shape: l.shape, fill: l.fill, stroke: l.stroke, radius: l.radius, sides: l.sides });
   if (l.type === 'text') Object.assign(o, { text: l.text, fontFamily: l.family, fontSize: l.size, fontWeight: l.weight, color: l.fill, align: l.align });
+  if (l.type === 'adjust') Object.assign(o, { filter: l.filter, params: l.params });
   if (l.type === 'group') o.children = l.children.map(layerSummary).reverse();
   return o;
 };
