@@ -1,7 +1,7 @@
 {
   "name": "lucentedit",
   "private": true,
-  "version": "0.7.1",
+  "version": "0.8.0",
   "description": "LucentEdit: a free, lightweight, open-source Photoshop + Illustrator alternative with a built-in MCP server for AI agents",
   "type": "module",
   "license": "MIT",
@@ -23,6 +23,7 @@
     "@tauri-apps/plugin-dialog": "^2.8.2",
     "ag-psd": "^31.0.3",
     "lucide-preact": "^1.55.0",
+    "pdfjs-dist": "^6.3.289",
     "preact": "^10.29.8"
   },
   "devDependencies": {

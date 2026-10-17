@@ -7,7 +7,7 @@
 
 **The free, lightweight, open-source Photoshop + Illustrator alternative, built for humans and AI agents.**
 
-Layers, pen paths, filters, PSD import/export and a built-in MCP server so Claude, Cursor, Copilot, Codex, Gemini and any other AI coding agent can design for you.
+Layers, pen paths, filters, Photoshop (PSD) and Illustrator (AI) files, and a built-in MCP server so Claude, Cursor, Copilot, Codex, Gemini and any other AI coding agent can design for you.
 No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-7c5cff.svg)](LICENSE)
@@ -77,13 +77,13 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 - **Light.** Native Tauri shell with the system webview: the `.deb`/`.rpm` packages are about 2 MB, the app uses a fraction of the memory of Electron apps and runs on low-spec PCs. (The portable AppImage is ~110 MB because it bundles its own WebKit.)
 - **One app for pixels and vectors.** Raster painting and Illustrator-style pen paths live in the same layer stack.
 - **AI-native.** A local MCP server is built in. Any agent can create documents, draw, apply filters, look at a rendered preview and export, while you watch it happen live.
-- **Familiar.** Photoshop keyboard shortcuts and terminology, PSD import/export with layers.
+- **Familiar.** Photoshop keyboard shortcuts and terminology. Opens and saves Photoshop `.psd` and Illustrator `.ai` files with editable layers and text.
 
 ## Features
 
 | Area | What you get in v0.1 |
 | --- | --- |
-| **Documents** | Multi-document tabs, 12 size presets, native `.lucentedit` format, open PNG/JPG/WebP/GIF/SVG/PSD, drag & drop and paste images from the clipboard, Image Size, Canvas Size, rotate/flip canvas, trim |
+| **Documents** | Multi-document tabs, 12 size presets, native `.lucentedit` format, open PNG/JPG/WebP/GIF/SVG/PSD/AI/PDF, drag & drop and paste images from the clipboard, Image Size, Canvas Size, rotate/flip canvas, trim |
 | **Layers** | Raster, vector shapes, pen paths, text, groups, **Smart Objects** (scale without quality loss, Edit Contents in a new tab, changes sync back), adjustment layers and fill layers (solid, gradient). Blend modes, opacity, lock, visibility, drag to reorder, Layer via Copy/Cut, Merge Down/Visible, Stamp Visible, Flatten |
 | **Selection & transform** | Move with free transform (resize, rotate), snapping and smart guides, Rectangular/Elliptical/Single Row/Single Column Marquee, Lasso, Polygonal Lasso, Magnetic Lasso, Magic Wand, Quick Selection, Crop. Select > Color Range, Modify (Border, Smooth, Expand, Contract, Feather), Grow, Similar, Reselect, Save/Load Selection, Quick Mask |
 | **Painting & retouching** | Brush, Pencil, Color Replacement, Eraser, Background Eraser, Magic Eraser, Paint Bucket, Gradient, Clone Stamp, Healing Brush, Spot Healing Brush, Red Eye, History Brush, Blur, Sharpen, Smudge, Dodge, Burn, Sponge |
@@ -104,7 +104,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 | **Filters** | 50+ filters in Photoshop's submenus: Blur (Average, Blur, Blur More, Box, Gaussian, Motion, Radial, Surface), Distort (Pinch, Polar Coordinates, Ripple, Spherize, Twirl, Wave, ZigZag), Noise (Add Noise, Despeckle, Dust & Scratches, Median, Reduce Noise), Pixelate (Color Halftone, Crystallize, Facet, Fragment, Mezzotint, Mosaic, Pointillize), Render (Clouds, Difference Clouds, Fibers, Lens Flare, Vignette), Sharpen (Sharpen, Sharpen More, Sharpen Edges, Smart Sharpen, Unsharp Mask), Stylize (Diffuse, Emboss, Find Edges, Oil Paint, Solarize, Tiles, Trace Contour, Wind), Other (High Pass, Maximum, Minimum, Offset). Live preview, limited to the selection, Last Filter |
 | **Layout** | Align and distribute |
 | **History** | History panel with undo/redo |
-| **Import / export** | PSD import/export with layers, SVG import as editable vector layers (great for Illustrator files saved as SVG), export PNG / JPG / WebP (with 0.25× to 4× scale) / SVG, save `.lucentedit` |
+| **Import / export** | **Photoshop `.psd`**: open and save with layers, groups, masks, blend modes, and editable text layers. **Illustrator `.ai`** (PDF-compatible, Illustrator's default): open as editable vector shapes and live text with fonts and colors, and save `.ai` files Illustrator opens as editable artwork. Also PDF in and out, SVG as editable vectors, PNG / JPG / WebP (0.25× to 4×), and `.lucentedit` |
 | **Navigation** | Hand (or hold Space), Zoom, Ctrl+wheel zoom at cursor, fit to screen, 100% view, rulers, grid |
 | **UX** | Premium dark UI with Photoshop's menus, toolbar groups and default keyboard shortcuts, Edit > Fill and Stroke dialogs, command search (Ctrl+F), scrubbable number fields that accept math (`120*2`), color picker with recent colors |
 | **AI** | Built-in MCP server (Streamable HTTP) plus a stdio bridge for every MCP client |
@@ -368,7 +368,7 @@ Use the HTTP URL `http://127.0.0.1:47800/mcp` if the client supports Streamable 
 | **Brand Training** | `get_brand_style` (learned profile and layouts), `list_brand_examples`, `find_similar_examples`, `get_example` (image plus analyzed structure), `recreate_layout` (new document from a learned layout with the brand's assets), `score_brand_fit` (0-100 with fixes), `add_training_example`, `retrain_brand` |
 | **Assets library** | `list_assets` (categories, tags, brand palettes, fonts; filter by brand), `get_asset_preview`, `place_asset`, `save_asset`, `manage_assets` (categories, tags, palettes), `set_assets_folder` (the user confirms the change in the app) |
 | **See the result** | `render_preview` (returns a PNG so the agent can look at its own work) |
-| **Files** | `export_document` (png, jpg, webp, svg, psd, lucentedit), `open_file`, `save_document` |
+| **Files** | `export_document` (png, jpg, webp, svg, psd, ai, pdf, lucentedit), `open_file`, `save_document` |
 | **History** | `undo`, `redo` |
 | **Misc** | `list_fonts`, `batch` (run many operations in one call) |
 
@@ -467,7 +467,8 @@ Layers panel: `Ctrl`-click a thumbnail to load it as a selection (`Shift` adds, 
 | Swatches / Fill & Stroke | Fill (solid, linear, radial) and Stroke (dash, cap, join) |
 | History palette | History panel |
 | Align panel | Align & distribute |
-| `.psd` | Import and export with layers; native format is `.lucentedit` |
+| `.psd` | Open and save with layers, masks and editable text; native format is `.lucentedit` |
+| `.ai` | Open (PDF-compatible files, Illustrator's default) and save with editable vectors and live text |
 
 ## Build from source
 
@@ -519,7 +520,7 @@ npm run dev          # http://localhost:1420
 ```
 lucentedit/
 ├── src/                 # Frontend (Preact + TypeScript, Canvas2D)
-│   ├── core/            # Document model, rendering, tools, filters, PSD/SVG I/O
+│   ├── core/            # Document model, rendering, tools, filters, PSD/AI/PDF/SVG I/O
 │   ├── mcp/             # MCP tool handlers (bridge between agent calls and the editor)
 │   └── ui/              # Panels, toolbars, dialogs, dark theme
 ├── src-tauri/           # Rust shell: window, native dialogs, local MCP HTTP server
@@ -545,7 +546,7 @@ lucentedit/
 - [x] Brand Training: learn each brand's style from its past designs, recreate its layouts, score brand fit
 - [ ] ML-quality Object Selection and Generative Fill (optional local models)
 - [ ] Smart filters, layer comps, artboards
-- [ ] Adobe Illustrator (`.ai`) import
+- [x] Adobe Illustrator (`.ai`) open and save, editable text in PSD
 - [ ] Plugin API
 - [ ] Signed and notarized builds, auto-update
 

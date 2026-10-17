@@ -313,7 +313,7 @@ function menus(): { label: string; items: MenuEntry[] }[] {
   const auto = adjust.filter((f) => f.id.startsWith('auto-')).map((f) => `filter:${f.id}`);
   return [
     { label: 'File', items: ['new', 'open', '-', 'close', 'closeAll', '-', 'save', 'saveAs', 'saveCopy', 'revert', '-',
-      { label: 'Export', items: ['exportPng', 'exportJpg', 'exportSvg', '-', 'export', 'saveForWeb'] }, '-', 'place'] },
+      { label: 'Export', items: ['exportPng', 'exportJpg', 'exportSvg', 'exportPsd', 'exportAi', 'exportPdf', '-', 'export', 'saveForWeb'] }, '-', 'place'] },
     { label: 'Edit', items: ['undo', 'redo', 'stepForward', 'stepBackward', '-', 'cut', 'copy', 'copyMerged', 'paste', 'pasteInPlace', 'delete', '-', 'palette', '-',
       'fillDialog', 'contentAwareFill', 'strokeDialog', 'fill', 'fillBg', '-', 'transform',
       { label: 'Transform', items: ['transformSkew', 'transformDistort', 'transformPerspective', 'transformWarp', '-', 'rot180', 'rot90', 'rot-90', '-', 'flipH', 'flipV'] }, '-', 'purgeHistory', '-', 'shortcuts', 'preferences'] },

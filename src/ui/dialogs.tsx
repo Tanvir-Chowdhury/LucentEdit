@@ -102,8 +102,8 @@ function ExportDialog() {
   return (
     <Dialog title="Export As" sub={`${ds.doc.name} · ${ds.doc.width} × ${ds.doc.height}`} wide foot={<><button class="btn ghost" onClick={() => (dialog.value = null)}>Cancel</button><button class="btn primary" disabled={busy} onClick={go}><Icon name="download" size={14} /> {busy ? 'Exporting…' : 'Export'}</button></>}>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 18 }}>
-        <div style={{ display: 'grid', placeItems: 'center', minHeight: 280, borderRadius: 10, background: 'repeating-conic-gradient(#2a2a38 0 25%, #1f1f2a 0 50%) 0 0/16px 16px' }}>
-          <img src={preview} style={{ maxWidth: '100%', maxHeight: 320, boxShadow: '0 10px 30px rgba(0,0,0,.5)' }} />
+        <div style={{ display: 'grid', placeItems: 'center', minHeight: 280, borderRadius: 10, background: 'repeating-conic-gradient(#2c2c30 0 25%, #232326 0 50%) 0 0/16px 16px' }}>
+          <img src={preview} style={{ maxWidth: '100%', maxHeight: 320, boxShadow: '0 4px 16px rgba(0,0,0,.35)' }} />
         </div>
         <div class="kv" style={{ alignContent: 'start' }}>
           <label>Format</label>
@@ -113,6 +113,8 @@ function ExportDialog() {
             <option value="webp">WebP (web, small)</option>
             <option value="svg">SVG (vector)</option>
             <option value="psd">PSD (Photoshop, layered)</option>
+            <option value="ai">AI (Illustrator, editable vectors)</option>
+            <option value="pdf">PDF (print and sharing)</option>
             <option value="lucentedit">LucentEdit document</option>
           </select>
           {raster && <><label>Scale</label><select value={String(scale)} onChange={(e) => setScale(+(e.target as HTMLSelectElement).value)}>{[0.25, 0.5, 1, 2, 3, 4].map((s) => <option value={s}>{s}× · {Math.round(ds.doc.width * s)} × {Math.round(ds.doc.height * s)}</option>)}</select></>}
@@ -120,7 +122,9 @@ function ExportDialog() {
           <label />
           <div style={{ color: 'var(--muted)', lineHeight: 1.5 }}>
             {fmt === 'svg' && 'Shapes, paths and text stay editable vectors. Pixel layers are embedded as images.'}
-            {fmt === 'psd' && 'Opens in Photoshop with your layers, names, opacity and blend modes.'}
+            {fmt === 'psd' && 'Opens in Photoshop with your layers, names, opacity and blend modes. Text stays editable.'}
+            {fmt === 'ai' && 'Opens in Illustrator: shapes and paths stay editable vectors and text stays live text. Masks, effects and pixel layers are embedded as images.'}
+            {fmt === 'pdf' && 'Vector PDF: sharp at any size, text stays selectable.'}
             {fmt === 'png' && 'Best for UI, graphics and anything with transparency.'}
             {fmt === 'jpg' && 'Transparent areas become white.'}
             {fmt === 'webp' && 'Modern web format with transparency and small files.'}
@@ -303,7 +307,7 @@ function AboutDialog() {
     <Dialog title="About LucentEdit" foot={<button class="btn primary" onClick={() => (dialog.value = null)}>Close</button>}>
       <div class="hero" style={{ marginBottom: 12 }}>
         <img src="/logo.svg" style={{ width: 56, height: 56, borderRadius: 14 }} />
-        <div><h1 style={{ fontSize: 22 }}><span>LucentEdit</span> 0.7.1</h1><p>Free, open-source image editor and vector design tool with a built-in MCP server.</p></div>
+        <div><h1 style={{ fontSize: 22 }}><span>LucentEdit</span> 0.8.0</h1><p>Free, open-source image editor and vector design tool with a built-in MCP server.</p></div>
       </div>
       <p style={{ color: 'var(--text-2)', lineHeight: 1.6 }}>No accounts, no subscriptions, no telemetry. Your files stay on your computer. Licensed under MIT.</p>
     </Dialog>

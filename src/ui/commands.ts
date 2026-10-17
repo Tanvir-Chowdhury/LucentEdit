@@ -80,7 +80,7 @@ export async function saveDoc(as = false) {
   touch();
 }
 
-export async function quickExport(format: 'png' | 'jpg' | 'svg') {
+export async function quickExport(format: 'png' | 'jpg' | 'svg' | 'psd' | 'ai' | 'pdf') {
   const ds = cur();
   if (!ds) return;
   const bytes = await exportBytes(ds.doc, format);
@@ -259,6 +259,9 @@ export const COMMANDS: Command[] = [
   { id: 'export', label: 'Export As…', keys: 'Mod+Alt+Shift+W', run: () => (dialog.value = { kind: 'export' }), enabled: hasDoc },
   { id: 'exportPng', label: 'Quick Export as PNG', run: () => quickExport('png'), enabled: hasDoc },
   { id: 'exportSvg', label: 'Quick Export as SVG', run: () => quickExport('svg'), enabled: hasDoc },
+  { id: 'exportPsd', label: 'Quick Export as PSD (Photoshop)', run: () => quickExport('psd'), enabled: hasDoc },
+  { id: 'exportAi', label: 'Quick Export as AI (Illustrator)', run: () => quickExport('ai'), enabled: hasDoc },
+  { id: 'exportPdf', label: 'Quick Export as PDF', run: () => quickExport('pdf'), enabled: hasDoc },
   { id: 'close', label: 'Close', keys: 'Mod+W', run: () => closeDoc(activeIndex.value), enabled: hasDoc },
   // Edit
   { id: 'undo', label: 'Undo', keys: 'Mod+Z', run: undo, enabled: () => (cur()?.hIndex ?? 0) > 0 },

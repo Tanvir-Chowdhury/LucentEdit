@@ -4,10 +4,11 @@ import {
   uid, makeCanvas, ctx2d, imageToCanvas, bytesToDataURL, canvasToBlob, layerMatrix, downloadBlob,
   dataURLToBytes, refreshGroups, walk,
 } from './util';
-import { flatten, layoutText, fitText, renderLayerToDocCanvas } from './render';
+import { flatten, layoutText, fitText, renderLayerToDocCanvas, fontString } from './render';
 import { createDoc } from './store';
 import { shapeToPaths, pathsToD, parseSvgPath, mapPaths, normalizePaths } from './paths';
-import { newRaster } from './ops';
+import { newRaster, newText } from './ops';
+import { psFontToCss, cssToPsFont, cssToRgb, pdfToSvg, docToPdf } from './pdf';
 
 // Files: native .lucentedit, PSD (via ag-psd), SVG import/export, raster images, and the
 // desktop (Tauri) / browser file access layer.
@@ -21,7 +22,7 @@ export async function tauriInvoke<T = any>(cmd: string, args?: any, opts?: any):
 
 export interface OpenedFile { name: string; bytes: Uint8Array; path?: string }
 
-export const OPEN_EXTS = ['lucentedit', 'lucent', 'psd', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif'];
+export const OPEN_EXTS = ['lucentedit', 'lucent', 'psd', 'ai', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif'];
 
 export async function readPath(path: string): Promise<Uint8Array> {
   if (!isTauri) {
@@ -118,6 +119,12 @@ export async function docFromFile(f: OpenedFile): Promise<Doc> {
   const ext = extOf(f.name);
   if (ext === 'lucentedit' || ext === 'lucent') { const d = await deserializeDoc(f.bytes); d.path = f.path; return d; }
   if (ext === 'psd') return readPsdDoc(f);
+  if (ext === 'ai' || ext === 'pdf') {
+    const { layers, width, height } = await importSvg((await pdfToSvg(f.bytes)).svg);
+    const doc = createDoc({ name: baseName(f.name), width, height, background: null });
+    doc.layers = layers;
+    return doc;
+  }
   if (ext === 'svg') {
     const { layers, width, height } = await importSvg(new TextDecoder().decode(f.bytes));
     const doc = createDoc({ name: baseName(f.name), width, height, background: null });
@@ -133,8 +140,9 @@ export async function docFromFile(f: OpenedFile): Promise<Doc> {
 /** Layers to place into an existing document (File > Place, drag & drop, MCP add_image). */
 export async function layersFromFile(f: OpenedFile, doc: Doc): Promise<Layer[]> {
   const ext = extOf(f.name);
-  if (ext === 'svg') {
-    const { layers } = await importSvg(new TextDecoder().decode(f.bytes));
+  if (ext === 'svg' || ext === 'ai' || ext === 'pdf') {
+    const text = ext === 'svg' ? new TextDecoder().decode(f.bytes) : (await pdfToSvg(f.bytes)).svg;
+    const { layers } = await importSvg(text);
     if (layers.length <= 1) return layers;
     const g: GroupLayer = { id: uid(), name: baseName(f.name), type: 'group', children: layers, expanded: false, visible: true, locked: false, opacity: 1, blend: 'normal', x: 0, y: 0, w: 1, h: 1, rotation: 0 };
     refreshGroups([g]);
@@ -172,6 +180,8 @@ async function readPsdDoc(f: OpenedFile): Promise<Doc> {
       const g: GroupLayer = { ...common, type: 'group', children: conv(l.children), expanded: !!l.opened, x: 0, y: 0, w: 1, h: 1 };
       return g.children.length ? g : null;
     }
+    const t = l.text && psdTextIn(l, common);
+    if (t) return t;
     if (!l.canvas || !l.canvas.width) return null;
     return { ...common, type: 'raster', canvas: l.canvas, x: l.left ?? 0, y: l.top ?? 0, w: l.canvas.width, h: l.canvas.height };
   }).filter(Boolean) as Layer[];
@@ -179,6 +189,51 @@ async function readPsdDoc(f: OpenedFile): Promise<Doc> {
   if (!doc.layers.length && psd.canvas) doc.layers = [{ ...newRaster({ doc } as any, 'Background', psd.canvas) }];
   refreshGroups(doc.layers);
   return doc;
+}
+
+/** A Photoshop text layer as an editable text layer (font matched by its PostScript name). */
+function psdTextIn(l: any, common: any): TextLayer | null {
+  const t = l.text, st = t.style ?? {}, tr: number[] = t.transform ?? [1, 0, 0, 1, l.left ?? 0, l.top ?? 0];
+  if (typeof t.text !== 'string' || !t.text.trim()) return null;
+  const scale = Math.hypot(tr[2], tr[3]) || 1;
+  const size = Math.max(1, (st.fontSize ?? 12) * scale);
+  const f = st.font?.name ? psFontToCss(st.font.name) : { family: 'Inter Variable', weight: 400, italic: false };
+  const c = st.fillColor, fill = c && 'r' in c ? `#${[c.r, c.g, c.b].map((v: number) => Math.round(v).toString(16).padStart(2, '0')).join('')}` : '#000000';
+  const just = t.paragraphStyle?.justification;
+  const layer = newText(t.text.replace(/\r/g, '\n'), l.left ?? 0, l.top ?? 0, {
+    family: f.family, weight: st.fauxBold ? 700 : f.weight, italic: f.italic || !!st.fauxItalic, size, fill,
+    align: just === 'center' ? 'center' : just === 'right' ? 'right' : 'left',
+    lineHeight: st.leading && !st.autoLeading ? (st.leading * scale) / size : 1.2,
+    letterSpacing: st.tracking ? (st.tracking / 1000) * size : 0,
+  });
+  Object.assign(layer, common, { id: layer.id, rotation: (Math.atan2(tr[1], tr[0]) * 180) / Math.PI });
+  // Keep the layer where Photoshop drew it: its pixel bounds are the text's visible box.
+  if (l.right != null && l.bottom != null && !layer.rotation) { layer.x = l.left; layer.y = l.top; }
+  return layer;
+}
+
+/** Photoshop text data for a text layer, so the text stays editable in Photoshop. */
+function psdTextOut(t: TextLayer) {
+  if (typeof t.fill !== 'string' || t.effects?.shadow?.enabled || t.effects?.glow?.enabled) return undefined;
+  const [r, g, b] = cssToRgb(t.fill);
+  const lh = t.size * t.lineHeight;
+  const mc = makeCanvas(4, 4).getContext('2d')!;
+  mc.font = fontString(t);
+  const mt = mc.measureText('Hg');
+  const baseline = lh / 2 + ((mt.fontBoundingBoxAscent ?? t.size * 0.8) - (mt.fontBoundingBoxDescent ?? t.size * 0.2)) / 2;
+  const anchorX = t.align === 'center' ? t.w / 2 : t.align === 'right' ? t.w : 0;
+  const p = layerMatrix(t).transformPoint({ x: anchorX, y: baseline });
+  const a = (t.rotation * Math.PI) / 180;
+  return {
+    text: layoutText(t).join('\r'),
+    transform: [Math.cos(a), Math.sin(a), -Math.sin(a), Math.cos(a), p.x, p.y],
+    antiAlias: 'smooth',
+    style: {
+      font: { name: cssToPsFont(t.family, t.weight, t.italic) }, fontSize: t.size, fillColor: { r: r * 255, g: g * 255, b: b * 255 },
+      leading: lh, autoLeading: false, tracking: Math.round((t.letterSpacing / t.size) * 1000),
+    },
+    paragraphStyle: { justification: t.align === 'center' ? 'center' : t.align === 'right' ? 'right' : 'left' },
+  };
 }
 
 /** PSD masks are grayscale images over a default color; ours are alpha masks in doc space. */
@@ -206,10 +261,12 @@ export async function writePsdBytes(doc: Doc): Promise<Uint8Array> {
     if (!b) return { ...common, canvas: makeCanvas(1, 1), left: 0, top: 0 };
     const c = makeCanvas(b.w, b.h);
     ctx2d(c).drawImage(full, -b.x, -b.y);
-    return { ...common, canvas: c, left: b.x, top: b.y };
+    const text = l.type === 'text' ? psdTextOut(l) : undefined;
+    return { ...common, canvas: c, left: b.x, top: b.y, ...(text ? { text } : {}) };
   });
   const psd = { width: doc.width, height: doc.height, canvas: flatten(doc), children: conv(doc.layers) };
-  return new Uint8Array(writePsd(psd as any, { generateThumbnail: true }));
+  // invalidateTextLayers: Photoshop re-renders text layers on open, so they stay editable.
+  return new Uint8Array(writePsd(psd as any, { generateThumbnail: true, invalidateTextLayers: true }));
 }
 
 function layerBoundsPx(l: Layer, doc: Doc) {
@@ -443,11 +500,13 @@ function elementToPathData(el: Element): string | null {
 
 // Export
 
-export type ExportFormat = 'png' | 'jpg' | 'webp' | 'svg' | 'psd' | 'lucentedit';
+export type ExportFormat = 'png' | 'jpg' | 'webp' | 'svg' | 'psd' | 'ai' | 'pdf' | 'lucentedit';
 
 export async function exportBytes(doc: Doc, format: ExportFormat, opts: { quality?: number; scale?: number } = {}): Promise<Uint8Array> {
   if (format === 'svg') return new TextEncoder().encode(buildSvg(doc));
   if (format === 'psd') return writePsdBytes(doc);
+  // Illustrator opens a PDF saved as .ai as editable artwork, so both formats are the same file.
+  if (format === 'ai' || format === 'pdf') return docToPdf(doc);
   if (format === 'lucentedit') return serializeDoc(doc);
   const scale = opts.scale ?? 1;
   const opaque = format === 'jpg';

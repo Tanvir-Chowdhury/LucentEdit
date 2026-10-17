@@ -828,8 +828,8 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'export_document', description: 'Export the active document. format: png, jpg, webp, svg, psd or lucentedit. With path (desktop app), writes the file there; otherwise returns PNG/JPG/WebP previews inline.',
-    inputSchema: { type: 'object', required: ['format'], properties: { format: { type: 'string', enum: ['png', 'jpg', 'webp', 'svg', 'psd', 'lucentedit'] }, path: { type: 'string', description: 'Absolute output file path' }, scale: { type: 'number' }, quality: { type: 'number', description: '0-1 for jpg/webp' } } },
+    name: 'export_document', description: 'Export the active document. format: png, jpg, webp, svg, psd (Photoshop, layered, editable text), ai (Illustrator, editable vectors and live text), pdf or lucentedit. With path (desktop app), writes the file there; otherwise returns PNG/JPG/WebP previews inline.',
+    inputSchema: { type: 'object', required: ['format'], properties: { format: { type: 'string', enum: ['png', 'jpg', 'webp', 'svg', 'psd', 'ai', 'pdf', 'lucentedit'] }, path: { type: 'string', description: 'Absolute output file path' }, scale: { type: 'number' }, quality: { type: 'number', description: '0-1 for jpg/webp' } } },
     run: async (a) => {
       const ds = need(cur());
       const fmt = a.format as ExportFormat;
@@ -850,7 +850,7 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'open_file', description: 'Open an image, SVG, PSD or .lucentedit file from a local path (desktop app) or URL as a new document.',
+    name: 'open_file', description: 'Open an image, SVG, PSD, AI (Illustrator, PDF-compatible), PDF or .lucentedit file from a local path (desktop app) or URL as a new document.',
     inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
     run: async (a) => {
       const f = await loadSource(String(a.path));
@@ -936,7 +936,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.7.1' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.8.0' },
         instructions: GUIDE,
       });
     }

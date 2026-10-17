@@ -31,6 +31,7 @@
   "29": "flatten",
   "30": "Tool",
   "31": "Kind",
+  "32": "select2.tsx",
   "33": "install.ps1",
   "34": "mcp-smoke-test.mjs",
   "35": "lucentedit-mcp.mjs",
@@ -49,11 +50,15 @@
   "48": "filters.ts",
   "49": "contentaware.ts",
   "50": "walk",
+  "51": "training.check.ts",
+  "52": "store.ts",
+  "53": "paint.ts",
   "54": "findLayerIn",
+  "55": "warp.check.ts",
   "56": "infoPanels.tsx",
-  "57": "filters-algo.check.ts",
-  "59": "clamp",
-  "60": "assetThumb",
+  "58": "controls.tsx",
+  "59": "filters-algo.check.ts",
   "61": "findLayerIn",
-  "62": "cloneLayers"
+  "62": "clamp",
+  "66": "runDab"
 }
