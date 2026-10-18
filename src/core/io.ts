@@ -23,7 +23,7 @@ export async function tauriInvoke<T = any>(cmd: string, args?: any, opts?: any):
 
 export interface OpenedFile { name: string; bytes: Uint8Array; path?: string }
 
-export const OPEN_EXTS = ['lucentedit', 'lucent', 'psd', 'ai', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif'];
+export const OPEN_EXTS = ['lucentedit', 'lucent', 'psd', 'ai', 'ait', 'eps', 'epsf', 'ps', 'pdf', 'png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg', 'avif'];
 
 export async function readPath(path: string): Promise<Uint8Array> {
   if (!isTauri) {
@@ -120,8 +120,8 @@ export async function docFromFile(f: OpenedFile): Promise<Doc> {
   const ext = extOf(f.name);
   if (ext === 'lucentedit' || ext === 'lucent') { const d = await deserializeDoc(f.bytes); d.path = f.path; return d; }
   if (ext === 'psd') return readPsdDoc(f);
-  if (ext === 'ai' || ext === 'pdf') {
-    const { layers, width, height } = await importSvg((await pdfToSvg(f.bytes)).svg);
+  if (VECTOR_EXTS.includes(ext)) {
+    const { layers, width, height } = await importSvg(await vectorFileToSvg(f.bytes));
     const doc = createDoc({ name: baseName(f.name), width, height, background: null });
     doc.layers = layers;
     return doc;
@@ -141,8 +141,8 @@ export async function docFromFile(f: OpenedFile): Promise<Doc> {
 /** Layers to place into an existing document (File > Place, drag & drop, MCP add_image). */
 export async function layersFromFile(f: OpenedFile, doc: Doc): Promise<Layer[]> {
   const ext = extOf(f.name);
-  if (ext === 'svg' || ext === 'ai' || ext === 'pdf') {
-    const text = ext === 'svg' ? new TextDecoder().decode(f.bytes) : (await pdfToSvg(f.bytes)).svg;
+  if (ext === 'svg' || VECTOR_EXTS.includes(ext)) {
+    const text = ext === 'svg' ? new TextDecoder().decode(f.bytes) : await vectorFileToSvg(f.bytes);
     const { layers } = await importSvg(text);
     if (layers.length <= 1) return layers;
     const g: GroupLayer = { id: uid(), name: baseName(f.name), type: 'group', children: layers, expanded: false, visible: true, locked: false, opacity: 1, blend: 'normal', x: 0, y: 0, w: 1, h: 1, rotation: 0 };
@@ -160,6 +160,48 @@ export async function layersFromFile(f: OpenedFile, doc: Doc): Promise<Layer[]> 
   const s = Math.min(1, doc.width / canvas.width, doc.height / canvas.height);
   const w = canvas.width * s, h = canvas.height * s;
   return [{ id: uid(), name: baseName(f.name), type: 'raster', canvas, visible: true, locked: false, opacity: 1, blend: 'normal', x: (doc.width - w) / 2, y: (doc.height - h) / 2, w, h, rotation: 0 }];
+}
+
+// Illustrator, EPS, PostScript and PDF
+
+const VECTOR_EXTS = ['ai', 'ait', 'eps', 'epsf', 'ps', 'pdf'];
+
+/**
+ * Any Illustrator-family file as SVG for importSvg. The file's content decides, not its name:
+ * PDF (modern .ai, .pdf) through pdf.js; Illustrator's PostScript format (older .ai, Illustrator
+ * EPS) through the built-in reader; other PostScript through Ghostscript on the desktop.
+ */
+export async function vectorFileToSvg(bytes: Uint8Array): Promise<string> {
+  const head = new TextDecoder('latin1').decode(bytes.subarray(0, 1024));
+  if (head.includes('%PDF')) return (await pdfToSvg(bytes)).svg;
+  const isDosEps = bytes[0] === 0xc5 && bytes[1] === 0xd0 && bytes[2] === 0xd3 && bytes[3] === 0xc6;
+  if (!isDosEps && !head.startsWith('%!')) throw new Error('This file is not a PDF, Illustrator or PostScript file');
+  const { epsPostScript, illustratorBody, aiToSvg } = await import('./aiformat');
+  const ps = epsPostScript(bytes);
+  const ai = illustratorBody(ps);
+  if (ai) {
+    const r = aiToSvg(ai.body, ai.bbox, psFontToCss);
+    if (r.paths + r.texts > 0) return r.svg;
+  }
+  if (isTauri) {
+    // Original bytes: binary data in the file must not be re-encoded.
+    const viaGs = async (outline: boolean) => (await pdfToSvg(new Uint8Array(await tauriInvoke<ArrayBuffer>('postscript_to_pdf', bytes, outline ? { headers: { 'outline-text': '1' } } : undefined)))).svg;
+    const svg = await viaGs(false);
+    // Some files' fonts lose their letters on the way: then text as outlines looks right.
+    return looksGarbled(svg) ? viaGs(true) : svg;
+  }
+  throw new Error(ai ? 'No artwork found in this Illustrator file' : 'This EPS was not made by Illustrator. Open it in the LucentEdit desktop app with Ghostscript installed, or save it as PDF or SVG.');
+}
+
+/** True when the text in an SVG is mostly codes rather than words (fonts without a Unicode map). */
+export function looksGarbled(svg: string): boolean {
+  const text = [...svg.matchAll(/<text[^>]*>([^<]*)<\/text>/g)].map((m) => m[1]).join('');
+  if (text.length < 8) return false;
+  const plain = text.match(/[A-Za-z0-9\s.,:;!?'"()&%$#@+\-–—/]/g)?.length ?? 0;
+  const letters = text.match(/[\p{L}\p{M}]/gu)?.length ?? 0; // marks: Bangla, Hindi… vowel signs
+  // Real non-Latin text is letters in one script; garbled text is a soup of symbols and accents.
+  const scripts = new Set([...text].filter((c) => /\p{L}/u.test(c)).map((c) => (c.charCodeAt(0) < 0x250 ? 'latin' : c.charCodeAt(0) >> 7)));
+  return plain / text.length < 0.6 && (letters / text.length < 0.5 || scripts.size > 2 || /[\u0080-\u00ff]/.test(text) && plain / text.length < 0.4);
 }
 
 // PSD
@@ -246,6 +288,12 @@ function psdTextOut(t: TextLayer) {
   };
 }
 
+/** Shape colors as #rrggbb: imported SVG/AI/PDF shapes carry computed CSS like "rgb(…)". */
+function hexColors(l: ShapeLayer): ShapeLayer {
+  const hx = (c: string) => { const [r, g, b] = cssToRgb(c); return `#${[r, g, b].map((v) => Math.round(v * 255).toString(16).padStart(2, '0')).join('')}`; };
+  return { ...l, fill: typeof l.fill === 'string' ? hx(l.fill) : l.fill, stroke: l.stroke && typeof l.stroke.paint === 'string' ? { ...l.stroke, paint: hx(l.stroke.paint) } : l.stroke };
+}
+
 /** Our alpha mask as a Photoshop grayscale mask (white reveals) covering the document. */
 function psdMaskOut(m: NonNullable<Layer['mask']>, doc: Doc) {
   const c = makeCanvas(doc.width, doc.height), x = ctx2d(c);
@@ -273,24 +321,29 @@ function psdMaskIn(m: any, W: number, H: number) {
 export async function writePsdBytes(doc: Doc): Promise<Uint8Array> {
   const { writePsd } = await import('ag-psd');
   const conv = (ls: Layer[]): any[] => ls.map((l) => {
-    const common: any = { name: l.name, hidden: !l.visible, opacity: l.opacity, blendMode: l.blend.replace(/-/g, ' '), clipping: !!l.clip };
+    // Our groups at Normal / 100% pass blending through (render.ts), which Photoshop calls Pass Through.
+    const passThrough = l.type === 'group' && l.blend === 'normal';
+    const common: any = { name: l.name, hidden: !l.visible, opacity: l.opacity, blendMode: passThrough ? 'pass through' : l.blend.replace(/-/g, ' '), clipping: !!l.clip };
+    // Effects and masks are written as Photoshop effects and masks (groups included), so the
+    // pixels below are drawn without them.
+    const effects = psdEffectsOut(l.effects);
+    if (effects) { common.effects = effects; l = { ...l, effects: undefined } as Layer; }
+    if (l.mask) { common.mask = psdMaskOut(l.mask, doc); l = { ...l, mask: undefined } as Layer; }
     if (l.type === 'group') return { ...common, opened: l.expanded, children: conv(l.children) };
     if (l.type === 'adjust') {
       const adjustment = psdAdjustOut(l);
       if (adjustment) return { ...common, adjustment };
     }
-    // Effects and masks are written as Photoshop effects and masks, so the pixels below are drawn without them.
-    const effects = psdEffectsOut(l.effects);
-    if (effects) { common.effects = effects; l = { ...l, effects: undefined } as Layer; }
-    if (l.mask) { common.mask = psdMaskOut(l.mask, doc); l = { ...l, mask: undefined } as Layer; }
-    // Render each layer with effects into document space, then crop to its bounds.
+    // Render each layer into document space, then crop to its bounds.
     const full = renderLayerToDocCanvas(doc, l);
     const b = layerBoundsPx(l, doc);
     if (!b) return { ...common, canvas: makeCanvas(1, 1), left: 0, top: 0 };
     const c = makeCanvas(b.w, b.h);
     ctx2d(c).drawImage(full, -b.x, -b.y);
     const text = l.type === 'text' ? psdTextOut(l) : undefined;
-    const vector = l.type === 'shape' ? psdShapeOut(l) : undefined;
+    const vector = l.type === 'shape' ? psdShapeOut(hexColors(l)) : undefined;
+    // A translucent fill color (rgba) becomes the shape layer's Fill opacity.
+    if (vector && l.type === 'shape' && typeof l.fill === 'string') { const a = cssToRgb(l.fill)[3]; if (a < 1) common.fillOpacity = a; }
     return { ...common, canvas: c, left: b.x, top: b.y, ...(text ? { text } : {}), ...(vector ?? {}) };
   });
   const psd = { width: doc.width, height: doc.height, canvas: flatten(doc), children: conv(doc.layers) };

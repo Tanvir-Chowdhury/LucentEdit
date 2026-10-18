@@ -850,7 +850,7 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
-    name: 'open_file', description: 'Open an image, SVG, PSD, AI (Illustrator, PDF-compatible), PDF or .lucentedit file from a local path (desktop app) or URL as a new document.',
+    name: 'open_file', description: 'Open an image, SVG, PSD (layered), AI (any Illustrator version), EPS, PDF or .lucentedit file from a local path (desktop app) or URL as a new document.',
     inputSchema: { type: 'object', required: ['path'], properties: { path: { type: 'string' } } },
     run: async (a) => {
       const f = await loadSource(String(a.path));
@@ -936,7 +936,7 @@ async function handleOne(m: Json): Promise<Json | null> {
       return reply({
         protocolVersion: PROTOCOLS.includes(want) ? want : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
-        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.9.0' },
+        serverInfo: { name: 'lucentedit', title: 'LucentEdit Design Studio', version: '0.10.0' },
         instructions: GUIDE,
       });
     }

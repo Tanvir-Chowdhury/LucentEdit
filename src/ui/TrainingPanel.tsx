@@ -5,7 +5,7 @@ import { cur, toast, openDocState } from '../core/store';
 import { Brand, Asset, deleteAsset, setAssetInfo, readAsset } from '../core/library';
 import { pickFiles, docFromFile } from '../core/io';
 import {
-  trainingItems, factKey, brandStyles, loadStyle, retrainBrand, addTrainingFiles, addCurrentDocument, scoreDocument, recreateLayout,
+  trainingItems, isCurrent, brandStyles, loadStyle, retrainBrand, addTrainingFiles, addCurrentDocument, scoreDocument, recreateLayout,
   type Bucket, type FitResult,
 } from '../core/training';
 import { askConfirm, askText } from './dialogs';
@@ -48,7 +48,7 @@ export function TrainingSection({ b }: { b: Brand }) {
   const items = trainingItems(b.name);
   const shown = items.filter((a) => a.training === bucket.value);
   const result = fit.value[b.name];
-  const stale = !!style && (items.length !== Object.keys(style.facts).length || items.some((a) => style.facts[a.id]?.key !== factKey(a)));
+  const stale = !!style && !isCurrent(style, items);
   const learn = () => {
     setBusy('Learning…');
     run(retrainBrand(b.name, (d, t) => setBusy(`Analyzing ${Math.min(d + 1, t)} of ${t}…`)).finally(() => setBusy(null)), 'Brand style updated');

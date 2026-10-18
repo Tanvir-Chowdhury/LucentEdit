@@ -21,7 +21,8 @@ const mul = (m: M6, n: M6): M6 => [
 ];
 const apply = (m: M6, x: number, y: number) => [m[0] * x + m[2] * y + m[4], m[1] * x + m[3] * y + m[5]];
 const r2 = (v: number) => Math.round(v * 100) / 100;
-const escXml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// Control characters (fonts without a Unicode map produce them) aren't allowed in XML at all.
+const escXml = (s: string) => s.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\ufffe\uffff]/g, '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** First page of a PDF / PDF-compatible .ai as SVG text (paths, images, live text). */
 export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages: number }> {
@@ -29,15 +30,19 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
   if (!head.includes('%PDF')) {
     throw new Error(head.startsWith('%!PS') ? 'This .ai file was saved without PDF compatibility. In Illustrator, save it again with "Create PDF Compatible File" turned on.' : 'Not a PDF or PDF-compatible .ai file');
   }
-  const pdfjs = await import('pdfjs-dist');
-  const worker = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
-  pdfjs.GlobalWorkerOptions.workerSrc = worker;
-  const pdf = await pdfjs.getDocument({ data: bytes.slice() }).promise;
+  const pdfjs = await loadPdfJs();
+  const task = pdfjs.getDocument({ data: bytes.slice() });
+  // Always release the document and its worker, also after a failure or a timeout.
+  try { return await readFirstPage(pdfjs, await withTimeout(task.promise, 60000, 'Reading the file took too long')); }
+  finally { task.destroy().catch(() => {}); }
+}
+
+async function readFirstPage(pdfjs: any, pdf: any): Promise<{ svg: string; pages: number }> {
   const page = await pdf.getPage(1);
   const vp = page.getViewport({ scale: 1 });
   const W = Math.round(vp.width), H = Math.round(vp.height);
   const base = vp.transform as M6;
-  const ops = await page.getOperatorList();
+  const ops: any = await withTimeout(page.getOperatorList(), 120000, 'Reading the drawing took too long');
   const { OPS } = pdfjs;
   const defs: string[] = [];
   // Layer tree: Illustrator layers (optional content), groups (q..Q, forms) and clip groups become
@@ -201,24 +206,55 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
   }
 
   // Live text: positions from the text layer, colors and font names from the drawing ops above.
-  const text = await page.getTextContent();
-  const textAt = new Map<number, string[]>();
+  const text: any = await withTimeout(page.getTextContent(), 60000, 'Reading the text took too long');
+  // Each piece: position, size, style, and the drawing run it belongs to (for color and stacking).
+  type Piece = { ri: number; x: number; y: number; end: number; size: number; family: string; weight: number; italic: boolean; fill: string; fa: number; str: string };
+  const pieces: Piece[] = [];
+  const runsByY = new Map<number, number[]>();
+  textRuns.forEach((t, k) => { const yb = Math.floor(t.y); if (!runsByY.has(yb)) runsByY.set(yb, []); runsByY.get(yb)!.push(k); });
+  const fontNames = new Map<string, string>();
   for (const it of text.items as any[]) {
-    if (!it.str?.trim()) continue;
+    if (!it.str) continue;
     const m = mul(base, it.transform as M6);
     // Nearest run on the same baseline at or before the piece's start (else simply the nearest).
+    // Runs are bucketed by baseline, so big text-heavy files don't compare every pair.
+    const size = Math.hypot(m[2], m[3]);
     let ri = 0, best = Infinity;
-    textRuns.forEach((t, k) => {
-      const dy = Math.abs(t.y - m[5]), dx = m[4] - t.x;
+    const score = (k: number) => {
+      const t = textRuns[k], dy = Math.abs(t.y - m[5]), dx = m[4] - t.x;
       const d = dy * 4 + (dx >= -0.5 ? dx : 1000 - dx);
       if (d < best) { best = d; ri = k; }
-    });
+    };
+    const reach = Math.max(2, Math.ceil(size));
+    for (let yb = Math.floor(m[5]) - reach; yb <= Math.floor(m[5]) + reach; yb++) for (const k of runsByY.get(yb) ?? []) score(k);
+    if (best === Infinity) for (let k = 0; k < textRuns.length; k++) score(k);
     const r = textRuns[ri] ?? { fill: '#000000', fa: 1, x: 0, y: 0 };
-    const size = Math.hypot(m[2], m[3]);
-    let fontName = '';
-    try { fontName = r.font ? ((await objGet(page, r.font, true)) as any)?.name ?? '' : ''; } catch { /* unknown font */ }
+    if (r.font && !fontNames.has(r.font)) {
+      let nm = '';
+      try { nm = ((await objGet(page, r.font, true)) as any)?.name ?? ''; } catch { /* unknown font */ }
+      fontNames.set(r.font, nm);
+    }
+    const fontName = r.font ? fontNames.get(r.font) ?? '' : '';
     const f = fontName ? psFontToCss(fontName) : { family: text.styles[it.fontName]?.fontFamily ?? 'sans-serif', weight: 400, italic: false };
-    textAt.set(ri, [...(textAt.get(ri) ?? []), `<text data-name="${escXml(it.str.trim().slice(0, 40))}" x="${r2(m[4])}" y="${r2(m[5])}" font-family="${escXml(f.family)}" font-size="${r2(size)}" font-weight="${f.weight}"${f.italic ? ' font-style="italic"' : ''} fill="${r.fill === 'none' ? '#000000' : r.fill}"${r.fa < 1 ? ` fill-opacity="${r.fa}"` : ''}>${escXml(it.str)}</text>`]);
+    pieces.push({ ri, x: m[4], y: m[5], end: m[4] + (it.width ?? 0), size, ...f, fill: r.fill === 'none' ? '#000000' : r.fill, fa: r.fa, str: it.str });
+  }
+  // Programs like Ghostscript place words or even single letters separately: join pieces that
+  // continue the same line in the same style back into one editable text.
+  const lines: Piece[] = [];
+  for (const p of pieces) {
+    const q = lines[lines.length - 1];
+    const same = q && Math.abs(q.y - p.y) < q.size * 0.2 && Math.abs(q.size - p.size) < q.size * 0.02 && q.family === p.family && q.weight === p.weight && q.italic === p.italic && q.fill === p.fill;
+    const gap = q ? p.x - q.end : 0;
+    if (same && gap > -q.size * 0.3 && gap < q.size * 1.5) {
+      q.str += gap > q.size * 0.2 && !q.str.endsWith(' ') && !p.str.startsWith(' ') ? ` ${p.str}` : p.str;
+      q.end = Math.max(q.end, p.end);
+    } else lines.push({ ...p });
+  }
+  const textAt = new Map<number, string[]>();
+  for (const t of lines) {
+    if (!t.str.trim()) continue;
+    if (!textAt.has(t.ri)) textAt.set(t.ri, []);
+    textAt.get(t.ri)!.push(`<text data-name="${escXml(t.str.trim().slice(0, 40))}" x="${r2(t.x)}" y="${r2(t.y)}" font-family="${escXml(t.family)}" font-size="${r2(t.size)}" font-weight="${t.weight}"${t.italic ? ' font-style="italic"' : ''} fill="${t.fill}"${t.fa < 1 ? ` fill-opacity="${t.fa}"` : ''}>${escXml(t.str.trimEnd())}</text>`);
   }
   while (tree.length > 1) close(tree[tree.length - 1].kind);
   const body = tree[0].items.join('').replace(/\u0000T(\d+)\u0000/g, (_, k) => (textAt.get(+k) ?? []).join(''));
@@ -226,9 +262,23 @@ export async function pdfToSvg(bytes: Uint8Array): Promise<{ svg: string; pages:
   return { svg, pages: pdf.numPages };
 }
 
+/** The legacy build of pdf.js: the modern one needs JavaScript features (Map.getOrInsertComputed,
+ *  Promise.try, Math.sumPrecise…) that the desktop app's WebKit on macOS and Linux doesn't have yet. */
+async function loadPdfJs() {
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  pdfjs.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
+  return pdfjs;
+}
+
+/** A failure inside pdf.js can leave a promise pending forever: fail with a message instead. */
+function withTimeout<T>(p: Promise<T>, ms: number, msg: string): Promise<T> {
+  return Promise.race([p, new Promise<T>((_, reject) => setTimeout(() => reject(new Error(msg)), ms))]);
+}
+
 function objGet(page: any, id: string, common = false): Promise<unknown> {
   const objs = common || id.startsWith('g_') ? page.commonObjs : page.objs;
-  return new Promise((resolve) => { try { objs.get(id, resolve); } catch { resolve(null); } });
+  // An object pdf.js can't decode never resolves: give up on it after a while, keep the rest.
+  return new Promise((resolve) => { setTimeout(() => resolve(null), 15000); try { objs.get(id, resolve); } catch { resolve(null); } });
 }
 
 function imageDataURL(img: any): string | null {

@@ -54,7 +54,7 @@ export const DEFAULT_CATEGORIES = ['Logos', 'Icons', 'Photos', 'Backgrounds', 'T
 const META_FILE = 'library.json';
 const KINDS: Record<string, Asset['kind']> = {
   png: 'image', jpg: 'image', jpeg: 'image', webp: 'image', gif: 'image', bmp: 'image', avif: 'image',
-  svg: 'vector', psd: 'document', lucentedit: 'document', lucent: 'document', ttf: 'font', otf: 'font', woff: 'font', woff2: 'font',
+  svg: 'vector', psd: 'document', lucentedit: 'document', lucent: 'document', ai: 'document', ait: 'document', eps: 'document', pdf: 'document', ttf: 'font', otf: 'font', woff: 'font', woff2: 'font',
 };
 
 export const library = signal<{
@@ -134,6 +134,13 @@ function browserFS(rootHandle: any): LibFS {
     async mkdir(rel) { await dirOf(rel, true); },
     async remove(rel) { const [dir, name] = split(rel); await (await dirOf(dir)).removeEntry(name, { recursive: true }); },
     async rename(from, to) {
+      // Never overwrite: the desktop refuses too. (Case-only renames are the same entry.)
+      if (from.toLowerCase() !== to.toLowerCase()) {
+        const [dir, name] = split(to);
+        const parent = await dirOf(dir).catch(() => null);
+        const exists = parent && (await parent.getFileHandle(name).then(() => true, () => false) || await parent.getDirectoryHandle(name).then(() => true, () => false));
+        if (exists) throw new Error(`${name} already exists`);
+      }
       // FSA has no portable move: copy then delete (files only; categories are renamed file by file).
       const entries = await fs.list(from).catch(() => null);
       if (entries) {

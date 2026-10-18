@@ -83,7 +83,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 
 | Area | What you get in v0.1 |
 | --- | --- |
-| **Documents** | Multi-document tabs, 12 size presets, native `.lucentedit` format, open PNG/JPG/WebP/GIF/SVG/PSD/AI/PDF, drag & drop and paste images from the clipboard, Image Size, Canvas Size, rotate/flip canvas, trim |
+| **Documents** | Multi-document tabs, 12 size presets, native `.lucentedit` format, open PNG/JPG/WebP/GIF/SVG/PSD/AI/EPS/PDF, drag & drop and paste images from the clipboard, Image Size, Canvas Size, rotate/flip canvas, trim |
 | **Layers** | Raster, vector shapes, pen paths, text, groups, **Smart Objects** (scale without quality loss, Edit Contents in a new tab, changes sync back), adjustment layers and fill layers (solid, gradient). Blend modes, opacity, lock, visibility, drag to reorder, Layer via Copy/Cut, Merge Down/Visible, Stamp Visible, Flatten |
 | **Selection & transform** | Move with free transform (resize, rotate), snapping and smart guides, Rectangular/Elliptical/Single Row/Single Column Marquee, Lasso, Polygonal Lasso, Magnetic Lasso, Magic Wand, Quick Selection, Crop. Select > Color Range, Modify (Border, Smooth, Expand, Contract, Feather), Grow, Similar, Reselect, Save/Load Selection, Quick Mask |
 | **Painting & retouching** | Brush, Pencil, Color Replacement, Eraser, Background Eraser, Magic Eraser, Paint Bucket, Gradient, Clone Stamp, Healing Brush, Spot Healing Brush, Red Eye, History Brush, Blur, Sharpen, Smudge, Dodge, Burn, Sponge |
@@ -104,7 +104,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 | **Filters** | 50+ filters in Photoshop's submenus: Blur (Average, Blur, Blur More, Box, Gaussian, Motion, Radial, Surface), Distort (Pinch, Polar Coordinates, Ripple, Spherize, Twirl, Wave, ZigZag), Noise (Add Noise, Despeckle, Dust & Scratches, Median, Reduce Noise), Pixelate (Color Halftone, Crystallize, Facet, Fragment, Mezzotint, Mosaic, Pointillize), Render (Clouds, Difference Clouds, Fibers, Lens Flare, Vignette), Sharpen (Sharpen, Sharpen More, Sharpen Edges, Smart Sharpen, Unsharp Mask), Stylize (Diffuse, Emboss, Find Edges, Oil Paint, Solarize, Tiles, Trace Contour, Wind), Other (High Pass, Maximum, Minimum, Offset). Live preview, limited to the selection, Last Filter |
 | **Layout** | Align and distribute |
 | **History** | History panel with undo/redo |
-| **Import / export** | **Photoshop `.psd`**, layer by layer both ways: groups, pixel layers, layer masks, blend modes, opacity, clipping, **editable text layers**, **shape layers as editable vectors** (fill and stroke), **adjustment layers** (Brightness/Contrast, Levels, Curves, Exposure, Vibrance, Hue/Saturation, Black & White, Invert, Posterize, Threshold) and **drop shadow / outer glow effects**. **Illustrator `.ai`** (PDF-compatible, Illustrator's default): opens with its **layers as named groups**, groups and clip groups nested inside, every path an editable vector and every text live text with its font and color; saves `.ai` files Illustrator opens as editable artwork. Also PDF in and out, SVG as editable vectors, PNG / JPG / WebP (0.25× to 4×), and `.lucentedit` |
+| **Import / export** | **Photoshop `.psd`**, layer by layer both ways: groups, pixel layers, layer masks, blend modes, opacity, clipping, **editable text layers**, **shape layers as editable vectors** (fill and stroke), **adjustment layers** (Brightness/Contrast, Levels, Curves, Exposure, Vibrance, Hue/Saturation, Black & White, Invert, Posterize, Threshold) and **drop shadow / outer glow effects**. **Illustrator `.ai`, `.ait` and `.eps`, any version**: modern (PDF-based) and older (PostScript) Illustrator files and Illustrator EPS open with their **layers as named groups**, groups, clip groups and compound paths nested inside, every path an editable vector, every text live text with its font and color, and embedded photos as pixel layers you can retouch. Other EPS/PostScript files open through Ghostscript on the desktop when it's installed. Saves `.ai` files Illustrator opens as editable artwork. Also PDF in and out, SVG as editable vectors, PNG / JPG / WebP (0.25× to 4×), and `.lucentedit` |
 | **Navigation** | Hand (or hold Space), Zoom, Ctrl+wheel zoom at cursor, fit to screen, 100% view, rulers, grid |
 | **UX** | Premium dark UI with Photoshop's menus, toolbar groups and default keyboard shortcuts, Edit > Fill and Stroke dialogs, command search (Ctrl+F), scrubbable number fields that accept math (`120*2`), color picker with recent colors |
 | **AI** | Built-in MCP server (Streamable HTTP) plus a stdio bridge for every MCP client |
@@ -468,7 +468,7 @@ Layers panel: `Ctrl`-click a thumbnail to load it as a selection (`Shift` adds, 
 | History palette | History panel |
 | Align panel | Align & distribute |
 | `.psd` | Open and save layer by layer: groups, masks, editable text, vector shapes, adjustment layers, effects |
-| `.ai` | Open with Illustrator's layers and groups, editable vectors and live text; save editable `.ai` |
+| `.ai` / `.eps` | Open any Illustrator version and Illustrator EPS with layers and groups, editable vectors and live text; save editable `.ai` |
 
 ## Build from source
 

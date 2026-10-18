@@ -275,6 +275,88 @@ fn rename_path(from: String, to: String) -> Result<(), String> {
     std::fs::rename(&from, &to).map_err(|e| format!("{from}: {e}"))
 }
 
+/// Any EPS / PostScript as PDF, through Ghostscript when it is installed (-dSAFER: the
+/// PostScript program can't touch files). Illustrator's own EPS files don't need this: the app
+/// reads them directly. invoke('postscript_to_pdf', bytes) with the file as a raw body.
+#[tauri::command]
+async fn postscript_to_pdf(request: tauri::ipc::Request<'_>) -> Result<tauri::ipc::Response, String> {
+    let tauri::ipc::InvokeBody::Raw(data) = request.body() else {
+        return Err("expected raw binary body".into());
+    };
+    let data = data.clone();
+    // "outline-text: 1": draw text as vector outlines, for files whose fonts lose their letters.
+    let outline = request.headers().get("outline-text").is_some();
+    // Ghostscript is a separate program that can run long: keep it off the async runtime.
+    tauri::async_runtime::spawn_blocking(move || run_ghostscript(&data, outline))
+        .await
+        .map_err(|e| e.to_string())?
+        .map(tauri::ipc::Response::new)
+}
+
+/// A fresh private folder in the temp dir: created new (never reused, so nobody can plant
+/// links in it beforehand) and readable only by this user on Unix.
+fn private_temp_dir() -> Result<std::path::PathBuf, String> {
+    for _ in 0..16 {
+        let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
+        let dir = std::env::temp_dir().join(format!("lucentedit-ps-{}-{}-{nanos:x}", std::process::id(), NEXT_ID.fetch_add(1, Ordering::Relaxed)));
+        let mut b = std::fs::DirBuilder::new();
+        #[cfg(unix)]
+        std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
+        match b.create(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.to_string()),
+        }
+    }
+    Err("couldn't create a temporary folder".into())
+}
+
+const GHOSTSCRIPT_TIMEOUT: Duration = Duration::from_secs(90);
+
+fn run_ghostscript(data: &[u8], outline: bool) -> Result<Vec<u8>, String> {
+    let dir = private_temp_dir()?;
+    let (input, output) = (dir.join("in.eps"), dir.join("out.pdf"));
+    let result = (|| {
+        // create_new: fails rather than following anything already at that path.
+        std::io::Write::write_all(&mut std::fs::OpenOptions::new().write(true).create_new(true).open(&input).map_err(|e| e.to_string())?, data).map_err(|e| e.to_string())?;
+        // Apps opened from the Dock don't get Homebrew's PATH, so try its usual places too.
+        let candidates: &[&str] = if cfg!(windows) { &["gswin64c", "gswin32c", "gs"] } else { &["gs", "/opt/homebrew/bin/gs", "/usr/local/bin/gs"] };
+        for gs in candidates {
+            let child = std::process::Command::new(gs)
+                .args(["-q", "-dNOPAUSE", "-dBATCH", "-dSAFER", "-dEPSCrop", "-sDEVICE=pdfwrite"])
+                .args(if outline { &["-dNoOutputFonts"][..] } else { &[][..] })
+                .arg(format!("-sOutputFile={}", output.display()))
+                .arg(&input)
+                .stdout(std::process::Stdio::null())
+                // To a file, not a pipe: a full pipe nobody reads would stall Ghostscript.
+                .stderr(std::fs::File::create(dir.join("err.txt")).map_err(|e| e.to_string())?)
+                .spawn();
+            let Ok(mut child) = child else { continue }; // not this name; try the next
+            // A PostScript program can loop forever: stop it after a while.
+            let started = std::time::Instant::now();
+            let status = loop {
+                match child.try_wait().map_err(|e| e.to_string())? {
+                    Some(st) => break st,
+                    None if started.elapsed() > GHOSTSCRIPT_TIMEOUT => {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                        return Err("This EPS took too long to read (over 90 seconds) and was stopped.".to_string());
+                    }
+                    None => std::thread::sleep(Duration::from_millis(50)),
+                }
+            };
+            if status.success() {
+                return std::fs::read(&output).map_err(|e| e.to_string());
+            }
+            let err = std::fs::read_to_string(dir.join("err.txt")).unwrap_or_default();
+            return Err(format!("Ghostscript couldn't read the file: {}", err.lines().next().unwrap_or("unknown error")));
+        }
+        Err("Ghostscript is not installed. Install it (ghostscript.com) to open this kind of EPS file, or save it from Illustrator as .ai or PDF.".to_string())
+    })();
+    let _ = std::fs::remove_dir_all(&dir);
+    result
+}
+
 /// An installed font family with the weights and styles available for it.
 #[derive(serde::Serialize, Clone)]
 struct FontFamily {
@@ -344,6 +426,7 @@ pub fn run() {
             remove_path,
             rename_path,
             set_library_root,
+            postscript_to_pdf,
             list_system_fonts
         ])
         .run(tauri::generate_context!())

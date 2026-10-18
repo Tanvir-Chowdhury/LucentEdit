@@ -28,6 +28,15 @@ export interface StyleFile {
   profile: Profile;
   /** Cached facts per example id; `key` changes when the file changes, so only edits are re-analyzed. */
   facts: Record<string, Facts & { key: string }>;
+  /** Examples that couldn't be read, by id -> key: not retried until the file changes. */
+  unreadable?: Record<string, string>;
+}
+
+/** True when the style file is up to date for every example (read or known-unreadable). */
+export function isCurrent(s: StyleFile | null | undefined, items: Asset[]): boolean {
+  if (!s) return false;
+  const known = (a: Asset) => s.facts[a.id]?.key === factKey(a) || s.unreadable?.[a.id] === factKey(a);
+  return items.every(known) && Object.keys(s.facts).length + Object.keys(s.unreadable ?? {}).length === items.length;
 }
 
 export const brandStyles = signal<Record<string, StyleFile | null>>({});
@@ -112,17 +121,19 @@ export async function retrainBrand(name?: string, onProgress?: (done: number, to
   const items = trainingItems(b.name);
   const facts: StyleFile['facts'] = {};
   const skipped: string[] = [];
+  const unreadable: Record<string, string> = {};
   for (const [i, a] of items.entries()) {
     onProgress?.(i, items.length);
     const key = factKey(a);
     const cached = old?.facts[a.id];
     if (cached?.key === key) { facts[a.id] = cached; continue; }
-    try { facts[a.id] = { ...(await factsFromAsset(a)), key }; } catch { skipped.push(a.file); }
+    if (old?.unreadable?.[a.id] === key) { unreadable[a.id] = key; skipped.push(a.file); continue; }
+    try { facts[a.id] = { ...(await factsFromAsset(a)), key }; } catch { unreadable[a.id] = key; skipped.push(a.file); }
   }
   onProgress?.(items.length, items.length);
   const profile = buildProfile(Object.values(facts), b.colors.map((c) => c.hex));
   if (skipped.length) profile.summary.push(`Couldn't read: ${skipped.join(', ')}.`);
-  const style: StyleFile = { version: 1, brand: b.name, updated: new Date().toISOString(), profile, facts };
+  const style: StyleFile = { version: 1, brand: b.name, updated: new Date().toISOString(), profile, facts, ...(skipped.length ? { unreadable } : {}) };
   await writeLibraryText(stylePath(b.name), JSON.stringify(style, null, 1));
   brandStyles.value = { ...brandStyles.value, [b.name]: style };
   return style;
@@ -133,8 +144,7 @@ export async function styleFor(name?: string): Promise<StyleFile> {
   const b = needBrand(name);
   const s = await loadStyle(b.name);
   const items = trainingItems(b.name);
-  const stale = !s || items.some((a) => s.facts[a.id]?.key !== factKey(a)) || Object.keys(s.facts).length !== items.length;
-  return stale ? retrainBrand(b.name) : s!;
+  return isCurrent(s, items) ? s! : retrainBrand(b.name);
 }
 
 // Adding examples
