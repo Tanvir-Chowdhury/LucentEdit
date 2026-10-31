@@ -161,9 +161,10 @@ let fs: LibFS | null = null;
 const STORE_KEY = 'lucentedit.library';
 
 /** True when the library can be used here (desktop app, or a browser with folder access). */
-export const librarySupported = () => isTauri || 'showDirectoryPicker' in window;
+export const librarySupported = () => import.meta.env.MODE !== 'demo' && (isTauri || 'showDirectoryPicker' in window);
 
 export async function chooseLibraryFolder() {
+  if (import.meta.env.MODE === 'demo') { toast('Local asset folders are unavailable in this demo. Download the desktop app to use them.', 'error'); return; }
   if (isTauri) {
     const { open } = await import('@tauri-apps/plugin-dialog');
     const dir = await open({ directory: true, multiple: false, title: 'Choose a folder for your Assets library' });
@@ -207,6 +208,7 @@ export async function useLibraryFolder(path: string) {
  * button (the browser needs a click to ask again). A missing folder is never recreated empty.
  */
 export async function restoreLibrary() {
+  if (!librarySupported()) return;
   if (isTauri) {
     let root: string | null = null;
     try { root = localStorage.getItem(STORE_KEY); } catch { /* storage unavailable */ }
@@ -226,6 +228,7 @@ export async function restoreLibrary() {
 
 /** Reconnect the remembered folder (call from a click: browsers only show the prompt then). */
 export async function reconnectLibrary() {
+  if (!librarySupported()) return;
   if (isTauri) return restoreLibrary();
   const h = await handleStore('get').catch(() => null);
   if (!h) { library.value = { ...library.value, pending: undefined }; return chooseLibraryFolder(); }

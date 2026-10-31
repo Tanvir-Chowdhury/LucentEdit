@@ -16,7 +16,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 [![Downloads](https://img.shields.io/github/downloads/Tanvir-Chowdhury/LucentEdit/total?color=0ea5e9)](https://github.com/Tanvir-Chowdhury/LucentEdit/releases)
 [![MCP](https://img.shields.io/badge/MCP-built--in-f97316.svg)](#use-with-ai-agents-mcp)
 
-[Install](#install) · [Use with AI agents](#use-with-ai-agents-mcp) · [Shortcuts](#coming-from-photoshop--illustrator) · [Build from source](#build-from-source) · [Roadmap](#roadmap)
+[Try online](https://tanvir-chowdhury.github.io/LucentEdit/) · [Install](#install) · [Use with AI agents](#use-with-ai-agents-mcp) · [Shortcuts](#coming-from-photoshop--illustrator) · [Build from source](#build-from-source) · [Roadmap](#roadmap)
 
 <br />
 
@@ -33,6 +33,7 @@ No signup. No login. No subscription. A 2 MB Linux package and a 4 MB app binary
 - [Screenshots](#screenshots)
 - [Why LucentEdit](#why-lucentedit)
 - [Features](#features)
+- [Online demo](#online-demo)
 - [Install](#install)
   - [macOS](#macos)
   - [Windows](#windows)
@@ -469,6 +470,24 @@ Layers panel: `Ctrl`-click a thumbnail to load it as a selection (`Shift` adds, 
 | Align panel | Align & distribute |
 | `.psd` | Open and save layer by layer: groups, masks, editable text, vector shapes, adjustment layers, effects |
 | `.ai` / `.eps` | Open any Illustrator version and Illustrator EPS with layers and groups, editable vectors and live text; save editable `.ai` |
+
+## Online demo
+
+[Try LucentEdit in your browser](https://tanvir-chowdhury.github.io/LucentEdit/) — no install or account needed. A layered sample opens immediately so you can explore the tools, edit text, move shapes, and try filters. Open your own images or create a new document, too.
+
+The demo is a static, client-only playground: edits live in your browser tab and reset on reload. Save and export download copies to your computer; documents are never uploaded to a server. **Open fresh sample** adds a clean sample tab without discarding your work. MCP, system font discovery, and local Assets/Brands folders require the desktop app. The bundled Inter font and browser fonts are available in the demo.
+
+### Run or deploy the demo
+
+```bash
+npm ci
+npm run build:demo
+npm run preview     # http://localhost:4173
+```
+
+The `demo` build mode enables the sample and demo notice and uses relative asset URLs, so it also works under a repository subpath. Regular web and desktop builds keep their existing startup behavior.
+
+The [Online demo workflow](.github/workflows/demo.yml) builds and tests pull requests, then deploys `dist/` to GitHub Pages on pushes to `main` or manual runs. For initial setup, select **Settings → Pages → Build and deployment → Source → GitHub Actions** in the repository, then run the workflow. Forks can use the same workflow and their own Pages URL; custom domains work too.
 
 ## Build from source
 

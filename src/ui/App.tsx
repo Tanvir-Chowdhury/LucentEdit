@@ -18,6 +18,7 @@ import { ColorPickerPopover } from './controls';
 import { matchShortcut, nudge, paste, placeFiles, openFiles, newDocument, run } from './commands';
 import { fileToOpened } from '../core/io';
 import { Icon } from './icons';
+import { isDemo, downloadUrl, openDemoDocument } from '../core/demo';
 
 const isTyping = (t: EventTarget | null) => {
   const el = t as HTMLElement | null;
@@ -101,7 +102,7 @@ function Welcome() {
     <div class="welcome">
       <div class="welcome-inner">
         <header class="hero">
-          <img src="/logo.svg" alt="" />
+          <img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" />
           <div>
             <h1>LucentEdit</h1>
             <p>Photo editing and vector design. Free, offline, and ready for AI agents.</p>
@@ -180,7 +181,12 @@ export function App() {
 
   const hasDocs = docs.value.length > 0;
   return (
-    <div class={`app${ui.value.panels ? '' : ' no-panels'}${ui.value.screen ? ` screen-${ui.value.screen}` : ''}`}>
+    <div class={`app${isDemo ? ' demo' : ''}${ui.value.panels ? '' : ' no-panels'}${ui.value.screen ? ` screen-${ui.value.screen}` : ''}`}>
+      {isDemo && <aside class="demo-banner" aria-label="Online demo">
+        <span><b>Online demo</b> · Try editing the sample or open your own files. Edits stay in this browser tab; save to download a copy. MCP and local asset folders require the desktop app.</span>
+        <button class="btn" onClick={() => { openDemoDocument(); }}>Open fresh sample</button>
+        <a class="btn primary" href={downloadUrl} target="_blank" rel="noopener noreferrer">Download desktop app</a>
+      </aside>}
       <MenuBar />
       <OptionsBar />
       <Toolbar />
