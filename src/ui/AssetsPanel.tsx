@@ -72,7 +72,7 @@ export function ConnectFolder({ intro }: { intro: string }) {
 export function AssetsPanel() {
   useTick();
   const lib = library.value;
-  if (!librarySupported()) return <div class="empty">The Assets library needs the desktop app (or a Chromium-based browser) to save files in a folder.</div>;
+  if (!librarySupported()) return <div class="empty">{import.meta.env.MODE === 'demo' ? 'Local asset folders are unavailable in the online demo. Download the desktop app to use Assets and Brands.' : 'The Assets library needs the desktop app (or a Chromium-based browser) to save files in a folder.'}</div>;
   if (!lib.root) return <ConnectFolder intro="Keep your logos, icons, photos, textures, fonts and brand colors in one folder on your computer, organized by category. AI agents can use them through MCP." />;
   const scopeBrand = brandByName(assetScope.value);
   const scope = scopeBrand?.name ?? '';

@@ -391,7 +391,7 @@ export function MenuBar() {
   const st = mcpStatus.value;
   return (
     <div class="menubar">
-      <div class="brand"><img src="/logo.svg" alt="" /><span>LucentEdit</span></div>
+      <div class="brand"><img src={`${import.meta.env.BASE_URL}logo.svg`} alt="" /><span>LucentEdit</span></div>
       {menus().map((m, i) => (
         <div class="menu-root">
           <button class={`menu-btn${open === i ? ' open' : ''}`} onClick={() => (openMenu.value = open === i ? null : i)} onMouseEnter={() => { if (open != null) openMenu.value = i; }}>{m.label}</button>

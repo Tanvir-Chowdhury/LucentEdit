@@ -17,6 +17,7 @@ import { COMMANDS } from './ui/commands';
 import { PS_COMMANDS } from './ui/psCommands';
 import { ACTION_COMMANDS } from './ui/ActionsPanel';
 import { installRecorder } from './core/actions';
+import { isDemo, openDemoDocument } from './core/demo';
 
 // Feature modules contribute tools and commands before the first render.
 registerTools(SELECT_TOOLS);
@@ -26,7 +27,16 @@ COMMANDS.push(...SELECT_COMMANDS, ...PS_COMMANDS, ...ACTION_COMMANDS, ...WARP_CO
 // Wraps every command so Actions can record it; must run after all command lists are added.
 installRecorder(COMMANDS);
 
-render(<App />, document.getElementById('app')!);
+async function mount() {
+  if (isDemo) {
+    // Measure sample text with the bundled font before creating the initial history snapshot.
+    // A font failure should still leave a usable editor with fallback fonts.
+    await document.fonts.load('750 100px "Inter Variable"').catch(() => {});
+    openDemoDocument();
+  }
+  render(<App />, document.getElementById('app')!);
+}
+void mount();
 startMcpBridge().catch((e) => console.error('MCP bridge failed to start', e));
 // Reopen the Assets folder chosen last time (desktop).
 restoreLibrary().catch(() => {});
